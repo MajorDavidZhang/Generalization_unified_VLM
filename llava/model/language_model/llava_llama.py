@@ -71,13 +71,15 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
         num_logits_to_keep: int = 0,
-        img_token_start: Optional[List[torch.LongTensor]] = None,
+        img_token_start: Optional[List[torch.LongTensor]] = [None],
         **loss_kwargs
     ) -> Union[Tuple, CausalLMOutputWithPast]:
         
         img_embed_targets=None
         img_row_indices =None
         img_col_indices = None
+
+        #print(f"inputs_embeds: {inputs_embeds}")
         
         if inputs_embeds is None:
             (
@@ -97,22 +99,9 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
                 img_token_start,
                 image_sizes
             )
-
-    
-            # 将 img_token_start 转为张量，如果是 None 则用 -1 占位
-            start_positions = torch.tensor([pos if pos is not None else -1 for pos in img_token_start], dtype=torch.long, device=inputs_embeds.device)
             
-            # 创建一个掩码，标记有效的起始位置
-            valid_mask = start_positions >= 0
-
-            # 筛选出有效的 batch 索引和对应的开始位置
-            batch_indices = valid_mask.nonzero(as_tuple=True)[0]
-            start_indices = start_positions[valid_mask]
-
-            # 使用高级索引从 inputs_embeds 中抽取 img_token_start 到 img_token_start + seq_len 的部分
-            img_row_indices = batch_indices.unsqueeze(1)
-            img_col_indices = start_indices.unsqueeze(1) + torch.arange(6,device=start_indices.device).unsqueeze(0)
-            img_embed_targets = inputs_embeds[img_row_indices, img_col_indices].detach()
+    
+            
 
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
@@ -142,17 +131,34 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
         else:
             logits = self.lm_head(hidden_states)
 
-        
         logits = logits.float()
-
-        #get img embedding
-        img_col_indices-=1
-        img_embed_outputs = hidden_states[img_row_indices, img_col_indices]
-
 
         loss = None
         
         if labels is not None:
+            # 将 img_token_start 转为张量，如果是 None 则用 -1 占位
+            start_positions = torch.tensor([pos if pos is not None else -1 for pos in img_token_start], dtype=torch.long, device=inputs_embeds.device)
+
+            #print(f"start_positions: {start_positions}")
+            # torch.save(start_positions, "/datadrive_a/jihai/tmp/start_positions.pt")
+            
+            # 创建一个掩码，标记有效的起始位置
+            valid_mask = start_positions >= 0
+
+            # 筛选出有效的 batch 索引和对应的开始位置
+            batch_indices = valid_mask.nonzero(as_tuple=True)[0]
+            start_indices = start_positions[valid_mask]
+
+            # 使用高级索引从 inputs_embeds 中抽取 img_token_start 到 img_token_start + seq_len 的部分
+            img_row_indices = batch_indices.unsqueeze(1)
+            img_col_indices = start_indices.unsqueeze(1) + torch.arange(6,device=start_indices.device).unsqueeze(0)
+            #print(f"img_col_indices: {img_col_indices}")
+            img_embed_targets = inputs_embeds[img_row_indices, img_col_indices].detach()
+
+            #get img embedding
+            img_col_indices-=1
+            img_embed_outputs = hidden_states[img_row_indices, img_col_indices]
+
             # Shift so that tokens < n predict n
             shift_logits = logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
@@ -163,10 +169,15 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
             # Enable model parallelism
             shift_labels = shift_labels.to(shift_logits.device)
             loss = loss_fct(shift_logits, shift_labels)
-
             loss_gen_fn = MSELoss()
             loss_gen=loss_gen_fn(img_embed_outputs, img_embed_targets)
+            #print(f"img_embed_outputs: {img_embed_outputs}")
+            #print(f"img_embed_targets: {img_embed_targets}")
+            #print(f"loss_gen: {loss_gen}\n start_positions: {start_positions}")
+            if torch.isnan(loss_gen): 
+                loss_gen = torch.tensor(0.0, device=loss_gen.device)
             loss += loss_gen
+            #print(loss)
 
         if not return_dict:
             output = (logits,) + outputs[1:]
@@ -179,6 +190,109 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+    @torch.no_grad()
+    def generate(
+        self,
+        inputs: Optional[torch.Tensor] = None,
+        images: Optional[torch.Tensor] = None,
+        image_sizes: Optional[torch.Tensor] = None,
+        img_token_start: Optional[List[torch.LongTensor]] = [None],
+        **kwargs,
+    ) -> Union[GenerateOutput, torch.LongTensor]:
+        position_ids = kwargs.pop("position_ids", None)
+        attention_mask = kwargs.pop("attention_mask", None)
+        if "inputs_embeds" in kwargs:
+            raise NotImplementedError("`inputs_embeds` is not supported")
+
+        # print(position_ids)
+        # print(attention_mask) both is none in inference
+
+        #  (
+        #         inputs,
+        #         position_ids,
+        #         attention_mask,
+        #         _,
+        #         inputs_embeds,
+        #         _
+        #     ) = self.prepare_inputs_labels_for_multimodal(
+        #         inputs,
+        #         position_ids,
+        #         attention_mask,
+        #         None,
+        #         None,
+        #         images,
+        #         image_sizes=image_sizes
+        #     )
+
+        if images is not None:
+            (
+                inputs,
+                position_ids,
+                attention_mask,
+                past_key_values,
+                inputs_embeds,
+                labels
+            ) = self.my_prepare_inputs_labels_for_multimodal(
+                inputs,
+                position_ids,
+                attention_mask,
+                None,
+                None,
+                images,
+                img_token_start,
+                image_sizes=image_sizes
+            )
+            # (
+            #     inputs,
+            #     position_ids,
+            #     attention_mask,
+            #     _,
+            #     inputs_embeds,
+            #     _
+            # ) = self.my_prepare_inputs_labels_for_multimodal(
+            #     inputs,
+            #     position_ids,
+            #     attention_mask,
+            #     None,
+            #     None,
+            #     images,
+            #     image_sizes=image_sizes
+            # )
+        else:
+            inputs_embeds = self.get_model().embed_tokens(inputs)
+        kwargs['output_hidden_states'] = True
+        #print(inputs_embeds)
+        outputs=super().generate(
+            position_ids=position_ids,
+            attention_mask=attention_mask,
+            inputs_embeds=inputs_embeds,
+            return_dict_in_generate=True,
+            **kwargs
+        )
+        #print(f"outputs_keys: {outputs.keys()}")
+        #print(f"outputs: {outputs}")
+        generated_tokens=outputs['sequences']
+        hidden_states=outputs['hidden_states'][-1]
+        #print(f"generated_tokens: {generated_tokens}")
+        # 返回结果
+        return {
+            "generated_tokens": generated_tokens,
+            "hidden_states": hidden_states,  # None if `<image>` not found
+        }
+
+
+    def prepare_inputs_for_generation(self, input_ids, past_key_values=None,
+                                      inputs_embeds=None, **kwargs):
+        images = kwargs.pop("images", None)
+        image_sizes = kwargs.pop("image_sizes", None)
+        inputs = super().prepare_inputs_for_generation(
+            input_ids, past_key_values=past_key_values, inputs_embeds=inputs_embeds, **kwargs
+        )
+        if images is not None:
+            inputs['images'] = images
+        if image_sizes is not None:
+            inputs['image_sizes'] = image_sizes
+        return inputs
 
 
 class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
@@ -303,4 +417,4 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
         return inputs
 
 AutoConfig.register("llava_llama", LlavaConfig)
-AutoModelForCausalLM.register(LlavaConfig, LlavaLlamaForCausalLM)
+AutoModelForCausalLM.register(LlavaConfig, LlavaLlamaForCausalLM_ImgGen)

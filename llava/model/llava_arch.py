@@ -70,6 +70,7 @@ class LlavaMetaModel:
             vision_tower.load_model()
 
         self.config.use_mm_proj = True
+        self.config.vision_tower_path=model_args.vision_tower_path
         self.config.mm_projector_type = getattr(model_args, 'mm_projector_type', 'linear')
         self.config.mm_hidden_size = vision_tower.hidden_size
         self.config.mm_vision_select_layer = mm_vision_select_layer
@@ -200,7 +201,7 @@ class LlavaMetaForCausalLM(ABC):
             else:
                 raise ValueError(f"Unexpected mm_patch_merge_type: {self.config.mm_patch_merge_type}")
         else:
-            image_features = self.encode_images(images)
+            image_features = self.encode_images(images).to(self.device)
             #print(image_features.shape)#torch.Size([1, 576, 4096])
 
         # TODO: image start / end is not implemented here to support pretraining.
@@ -389,7 +390,7 @@ class LlavaMetaForCausalLM(ABC):
             # else:
             #     raise ValueError(f"Unexpected mm_patch_merge_type: {self.config.mm_patch_merge_type}")
         else:
-            image_features = self.encode_images(images)
+            image_features = self.encode_images(images).to(self.device)
             #print(image_features.shape) #torch.Size([batch_size,seqlen, 4096])
 
         # TODO: image start / end is not implemented here to support pretraining.
@@ -434,6 +435,7 @@ class LlavaMetaForCausalLM(ABC):
                     ))
                 else:
                     cur_input_embeds_1 = self.get_model().embed_tokens(cur_input_ids)
+                   
                     cur_input_embeds = torch.cat([cur_input_embeds_1, cur_image_features[0:0]], dim=0)
                 new_input_embeds.append(cur_input_embeds)
                 new_labels.append(labels[batch_idx])

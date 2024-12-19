@@ -95,6 +95,7 @@ class SyntheticVisionTower(nn.Module):
         self.is_loaded = False
 
         self.vision_tower_name = vision_tower
+        self.args=args
 
 
         if not delay_load:
@@ -102,20 +103,23 @@ class SyntheticVisionTower(nn.Module):
         elif getattr(args, 'unfreeze_mm_vision_tower', False):
             self.load_model()
         else:
-            raise Exception("Model loading is delayed and unfreeze_mm_vision_tower is not set.")
+            #raise Exception("Model loading is delayed and unfreeze_mm_vision_tower is not set.")
+            pass
             
 
     def load_model(self, device_map=None):
         if self.is_loaded:
             print('{} is already loaded, `load_model` called again, skipping.'.format(self.vision_tower_name))
             return
-
+        self.image_processor = nn.Identity()
+    
          # 生成随机正交矩阵 A（使用 QR 分解）
         self.hidden_dim=4096
         self.mm_dim=7
-        random_matrix = torch.randn(self.hidden_dim, self.hidden_dim)
+        #random_matrix = torch.randn(self.hidden_dim, self.hidden_dim)
         # QR 分解得到正交矩阵 Q
-        Q, _ = torch.linalg.qr(random_matrix, mode='complete')
+        #Q, _ = torch.linalg.qr(random_matrix, mode='complete')
+        Q=torch.load(self.args.vision_tower_path)
         
         # 将 A 和 b 作为常量属性存储，并确保它们不会被训练
         self.register_buffer('A', Q)  # register_buffer 确保 A 不可训练

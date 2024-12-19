@@ -1,1 +1,3 @@
-from .model import LlavaLlamaForCausalLM
+from .model import LlavaLlamaForCausalLM,LlavaLlamaForCausalLM_ImgGen
+
+

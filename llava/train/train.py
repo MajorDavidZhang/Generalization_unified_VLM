@@ -57,6 +57,7 @@ class ModelArguments:
     freeze_backbone: bool = field(default=False)
     tune_mm_mlp_adapter: bool = field(default=False)
     vision_tower: Optional[str] = field(default=None)
+    vision_tower_path: Optional[str] = field(default=None)
     mm_vision_select_layer: Optional[int] = field(default=-1)   # default to the last layer
     pretrain_mm_mlp_adapter: Optional[str] = field(default=None)
     mm_projector_type: Optional[str] = field(default='linear')
@@ -805,8 +806,7 @@ class LazySupervisedDataset_ImgGen(Dataset):
         self.data_args = data_args
 
     def __len__(self):
-        #return len(self.list_data_dict)
-        return 10000
+        return len(self.list_data_dict)
 
     @property
     def lengths(self):
@@ -826,17 +826,17 @@ class LazySupervisedDataset_ImgGen(Dataset):
         return length_list
 
     def __getitem__(self, i) -> Dict[str, torch.Tensor]:
-        sources = self.list_data_dict[i%2]
+        sources = self.list_data_dict[i]
         if isinstance(i, int):
             sources = [sources]
         assert len(sources) == 1, "Don't know why it is wrapped to a list"  # FIXME
-        if 'image' in sources[0]:
-            image_file = self.list_data_dict[i]['image']
-            image_folder = self.data_args.image_folder
+        if 'tensor' in sources[0]:
+            #image_file = self.list_data_dict[i]['image']
+            #image_folder = self.data_args.image_folder
             #this is image processor of the vision tower, dont need
             #processor = self.data_args.image_processor
-            image = torch.load(os.path.join(image_folder, image_file))
-            
+            #image = torch.load(os.path.join(image_folder, image_file))
+            image=torch.Tensor(sources[0]['tensor'])
             #image = processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
             #----------ensure <image> is in the beginning of the question, then dont need preprocess_multimodal()
             # sources = preprocess_multimodal(
@@ -849,11 +849,12 @@ class LazySupervisedDataset_ImgGen(Dataset):
         data_dict = preprocess_v1_with_gen(
             sources,
             self.tokenizer,
-            has_image=('image' in self.list_data_dict[i]))
+            has_image=('tensor' in self.list_data_dict[i]))
         if isinstance(i, int):
             data_dict = dict(input_ids=data_dict["input_ids"][0],
                              labels=data_dict["labels"][0],
                              img_token_start=data_dict["img_token_start"])
+            #print(f"data_dict[img_token_start]:{data_dict['img_token_start']}")
 
         # image exist in the data
         if 'image' in self.list_data_dict[i]:
