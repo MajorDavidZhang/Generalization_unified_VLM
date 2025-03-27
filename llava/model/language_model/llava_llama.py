@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 
+from types import NoneType
 from typing import List, Optional, Tuple, Union
 
 import torch
@@ -75,7 +76,7 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
         **loss_kwargs
     ) -> Union[Tuple, CausalLMOutputWithPast]:
         
-        img_embed_targets=None
+      
         img_row_indices =None
         img_col_indices = None
 
@@ -88,7 +89,8 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
                 attention_mask,
                 past_key_values,
                 inputs_embeds,
-                labels
+                labels,
+                image_labels
             ) = self.my_prepare_inputs_labels_for_multimodal(
                 input_ids,
                 position_ids,
@@ -99,10 +101,6 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
                 img_token_start,
                 image_sizes
             )
-            
-    
-            
-
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -132,15 +130,18 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
             logits = self.lm_head(hidden_states)
 
         logits = logits.float()
-
         loss = None
-        
+        num_patches=self.get_model().vision_tower.num_patches
+
+        image_loss=None
+        if self.config.image_loss=='cosine':
+            image_loss=nn.CosineSimilarity(dim=-1)
+        elif self.config.image_loss=='mse':
+            image_loss=nn.MSELoss(reduction='none')
+
         if labels is not None:
             # 将 img_token_start 转为张量，如果是 None 则用 -1 占位
             start_positions = torch.tensor([pos if pos is not None else -1 for pos in img_token_start], dtype=torch.long, device=inputs_embeds.device)
-
-            #print(f"start_positions: {start_positions}")
-            # torch.save(start_positions, "/datadrive_a/jihai/tmp/start_positions.pt")
             
             # 创建一个掩码，标记有效的起始位置
             valid_mask = start_positions >= 0
@@ -151,14 +152,12 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
 
             # 使用高级索引从 inputs_embeds 中抽取 img_token_start 到 img_token_start + seq_len 的部分
             img_row_indices = batch_indices.unsqueeze(1)
-            img_col_indices = start_indices.unsqueeze(1) + torch.arange(6,device=start_indices.device).unsqueeze(0)
-            #print(f"img_col_indices: {img_col_indices}")
-            img_embed_targets = inputs_embeds[img_row_indices, img_col_indices].detach()
+            img_col_indices = start_indices.unsqueeze(1) + torch.arange(num_patches,device=start_indices.device).unsqueeze(0)
 
             #get img embedding
             img_col_indices-=1
             img_embed_outputs = hidden_states[img_row_indices, img_col_indices]
-
+    
             # Shift so that tokens < n predict n
             shift_logits = logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
@@ -169,16 +168,22 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
             # Enable model parallelism
             shift_labels = shift_labels.to(shift_logits.device)
             loss = loss_fct(shift_logits, shift_labels)
-            loss_gen_fn = MSELoss()
-            loss_gen=loss_gen_fn(img_embed_outputs, img_embed_targets)
-            #print(f"img_embed_outputs: {img_embed_outputs}")
-            #print(f"img_embed_targets: {img_embed_targets}")
-            #print(f"loss_gen: {loss_gen}\n start_positions: {start_positions}")
-            if torch.isnan(loss_gen): 
-                loss_gen = torch.tensor(0.0, device=loss_gen.device)
-            loss += loss_gen
-            #print(loss)
+            # loss_gen_fn = MSELoss(reduction='none')
+            # loss_gen=loss_gen_fn(self.get_model().mm_projector_head(img_embed_outputs), image_labels)
+            projected_embed = self.get_model().mm_projector_head(img_embed_outputs)
 
+            
+            
+            loss_gen = image_loss(projected_embed, image_labels)
+            if self.config.image_loss=='cosine':
+                loss_gen = 1 - loss_gen
+            padding_mask=torch.ones((loss_gen.shape),device=loss_gen.device)
+            padding_mask[-1]=0
+            loss_gen*= padding_mask
+            loss_gen=loss_gen.mean()
+            print(f"loss_gen: {loss_gen}")
+            loss += loss_gen
+ 
         if not return_dict:
             output = (logits,) + outputs[1:]
             return (loss,) + output if loss is not None else output
@@ -197,6 +202,7 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
         images: Optional[torch.Tensor] = None,
         image_sizes: Optional[torch.Tensor] = None,
         img_token_start: Optional[List[torch.LongTensor]] = [None],
+        input_img_features=None,
         **kwargs,
     ) -> Union[GenerateOutput, torch.LongTensor]:
         position_ids = kwargs.pop("position_ids", None)
@@ -204,26 +210,25 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
         if "inputs_embeds" in kwargs:
             raise NotImplementedError("`inputs_embeds` is not supported")
 
-        # print(position_ids)
-        # print(attention_mask) both is none in inference
-
-        #  (
-        #         inputs,
+        # if inputs_embeds is None:
+        #     (
+        #         input_ids,
         #         position_ids,
         #         attention_mask,
-        #         _,
+        #         past_key_values,
         #         inputs_embeds,
-        #         _
-        #     ) = self.prepare_inputs_labels_for_multimodal(
-        #         inputs,
+        #         labels,
+        #         image_labels
+        #     ) = self.my_prepare_inputs_labels_for_multimodal(
+        #         input_ids,
         #         position_ids,
         #         attention_mask,
-        #         None,
-        #         None,
+        #         past_key_values,
+        #         labels,
         #         images,
-        #         image_sizes=image_sizes
+        #         img_token_start,
+        #         image_sizes
         #     )
-
         if images is not None:
             (
                 inputs,
@@ -231,7 +236,8 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
                 attention_mask,
                 past_key_values,
                 inputs_embeds,
-                labels
+                labels,
+                image_labels
             ) = self.my_prepare_inputs_labels_for_multimodal(
                 inputs,
                 position_ids,
@@ -240,7 +246,8 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
                 None,
                 images,
                 img_token_start,
-                image_sizes=image_sizes
+                image_sizes=image_sizes,
+                input_img_features=input_img_features
             )
             # (
             #     inputs,
@@ -272,7 +279,7 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
         #print(f"outputs_keys: {outputs.keys()}")
         #print(f"outputs: {outputs}")
         generated_tokens=outputs['sequences']
-        hidden_states=outputs['hidden_states'][-1]
+        hidden_states=outputs['hidden_states']
         #print(f"generated_tokens: {generated_tokens}")
         # 返回结果
         return {

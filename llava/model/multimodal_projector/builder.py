@@ -129,26 +129,32 @@ class IdentityMap(nn.Module):
 
 
 
-def build_vision_projector(config, delay_load=False, **kwargs):
-    projector_type = getattr(config, 'mm_projector_type', 'linear')
-
-    if projector_type == 'linear':
-        return nn.Linear(config.mm_hidden_size, config.hidden_size)
-
-    mlp_gelu_match = re.match(r'^mlp(\d+)x_gelu$', projector_type)
-    if mlp_gelu_match:
-        mlp_depth = int(mlp_gelu_match.group(1))
-        modules = [nn.Linear(config.mm_hidden_size, config.hidden_size)]
-        for _ in range(1, mlp_depth):
+def build_vision_projector(input_size,output_size,type='linear'):
+    if type=='linear':
+        return nn.Linear(input_size, output_size)
+    elif type=='mlp':
+        modules = [nn.Linear(input_size, output_size)]
+        for _ in range(1, 2):
             modules.append(nn.GELU())
-            modules.append(nn.Linear(config.hidden_size, config.hidden_size))
+            modules.append(nn.Linear(output_size, output_size))
         return nn.Sequential(*modules)
 
-    if projector_type == 'identity':
-        return IdentityMap()
+# def build_vision_projector(config, delay_load=False, **kwargs):
+#     projector_type = getattr(config, 'mm_projector_type', 'linear')
 
-    if projector_type == 'affine':
-        return Affine(config.hidden_size)
+#     if projector_type == 'linear':
+#         return nn.Linear(config.mm_hidden_size, config.hidden_size),nn.Linear(config.hidden_size,config.mm_hidden_size)
 
 
-    raise ValueError(f'Unknown projector type: {projector_type}')
+    # mlp_gelu_match = re.match(r'^mlp(\d+)x_gelu$', projector_type)
+    # if mlp_gelu_match:
+    #     mlp_depth = int(mlp_gelu_match.group(1))
+    #     modules = [nn.Linear(config.mm_hidden_size, config.hidden_size)]
+    #     for _ in range(1, mlp_depth):
+    #         modules.append(nn.GELU())
+    #         modules.append(nn.Linear(config.hidden_size, config.hidden_size))
+    #     return nn.Sequential(*modules)
+
+
+
+    # raise ValueError(f'Unknown projector type: {projector_type}')

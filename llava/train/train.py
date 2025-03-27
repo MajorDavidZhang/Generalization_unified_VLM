@@ -58,13 +58,20 @@ class ModelArguments:
     tune_mm_mlp_adapter: bool = field(default=False)
     vision_tower: Optional[str] = field(default=None)
     vision_tower_path: Optional[str] = field(default=None)
+    vision_tower_gen: Optional[str] = field(default='same')
+    vision_tower_gen_path: Optional[str] = field(default=None)
+    mm_projector_head_output_size: Optional[int] = field(default=None)
     mm_vision_select_layer: Optional[int] = field(default=-1)   # default to the last layer
-    pretrain_mm_mlp_adapter: Optional[str] = field(default=None)
+    pretrained_mm_mlp_adapter: Optional[str] = field(default=None)
     mm_projector_type: Optional[str] = field(default='linear')
     mm_use_im_start_end: bool = field(default=False)
     mm_use_im_patch_token: bool = field(default=True)
     mm_patch_merge_type: Optional[str] = field(default='flat')
     mm_vision_select_feature: Optional[str] = field(default="patch")
+    image_loss: Optional[str] = field(default='mse')
+    
+
+
 
 
 @dataclass
@@ -76,7 +83,13 @@ class DataArguments:
     image_folder: Optional[str] = field(default=None)
     image_aspect_ratio: str = 'square'
     multimodal_out: bool=True
-
+    understanding_only: bool=False
+    generation_only: bool=False
+    image_shape: List[int] = field(
+        default_factory=lambda: [6,7],
+    )
+    num_image_token: int = 6 #how many token will one image take up
+    dataset: str = 'segment_digit'
 
 @dataclass
 class TrainingArguments(transformers.TrainingArguments):
@@ -112,6 +125,8 @@ class TrainingArguments(transformers.TrainingArguments):
     lora_bias: str = "none"
     mm_projector_lr: Optional[float] = None
     group_by_modality_length: bool = field(default=False)
+    num_ckpt_to_save: int = field(default=5)
+
 
 
 def maybe_zero_3(param, ignore_status=False, name=None):
@@ -415,7 +430,8 @@ def preprocess_llama_2(
 def preprocess_v1_with_gen(
     sources,
     tokenizer: transformers.PreTrainedTokenizer,
-    has_image: bool = False
+    has_image: bool = False,
+    num_image_token: int = 6 #how many token will one image take up
 ) -> Dict:
     """Preprocess conversations for generation.
     original preprocess_v1() will return:
@@ -514,9 +530,8 @@ def preprocess_v1_with_gen(
                     f" (ignored)"
                 )
     #-----------add preprocess for generation:
-    img_token_start=None
+    img_token_start=None #mark whether there is image to generate, and the generated image position
     if DEFAULT_IMAGE_TOKEN in sources[0][1]['value']:
-        num_image_token=6
         #sp token '<image>'
         gen_indicator=torch.LongTensor([[529,  3027, 29958]])
         # 查找 -200 的位置
@@ -799,6 +814,10 @@ class LazySupervisedDataset_ImgGen(Dataset):
                  data_args: DataArguments):
         super(LazySupervisedDataset_ImgGen, self).__init__()
         list_data_dict = json.load(open(data_path, "r"))
+        if data_args.generation_only:
+            list_data_dict = [e for e in list_data_dict if e['task']=="generation"]
+        if data_args.understanding_only:
+            list_data_dict = [e for e in list_data_dict if e['task']=="understanding"]
 
         rank0_print("Formatting inputs...Skip in lazy mode")
         self.tokenizer = tokenizer
@@ -807,14 +826,6 @@ class LazySupervisedDataset_ImgGen(Dataset):
 
     def __len__(self):
         return len(self.list_data_dict)
-
-    @property
-    def lengths(self):
-        length_list = []
-        for sample in self.list_data_dict:
-            img_tokens = 6 if 'image' in sample else 0
-            length_list.append(sum(len(conv['value'].split()) for conv in sample['conversations']) + img_tokens)
-        return length_list
 
     @property
     def modality_lengths(self):
@@ -831,17 +842,7 @@ class LazySupervisedDataset_ImgGen(Dataset):
             sources = [sources]
         assert len(sources) == 1, "Don't know why it is wrapped to a list"  # FIXME
         if 'tensor' in sources[0]:
-            #image_file = self.list_data_dict[i]['image']
-            #image_folder = self.data_args.image_folder
-            #this is image processor of the vision tower, dont need
-            #processor = self.data_args.image_processor
-            #image = torch.load(os.path.join(image_folder, image_file))
             image=torch.Tensor(sources[0]['tensor'])
-            #image = processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
-            #----------ensure <image> is in the beginning of the question, then dont need preprocess_multimodal()
-            # sources = preprocess_multimodal(
-            #     copy.deepcopy([e["conversations"] for e in sources]),
-            #     self.data_args)
             sources = copy.deepcopy([e["conversations"] for e in sources])
         else:
             sources = copy.deepcopy([e["conversations"] for e in sources])
@@ -857,7 +858,7 @@ class LazySupervisedDataset_ImgGen(Dataset):
             #print(f"data_dict[img_token_start]:{data_dict['img_token_start']}")
 
         # image exist in the data
-        if 'image' in self.list_data_dict[i]:
+        if 'tensor' in self.list_data_dict[i]:
             #whether image is in question (understanding) or answer (generation)
             if DEFAULT_IMAGE_TOKEN in sources[0][0]['value']:
                 data_dict['image'] = image
@@ -865,19 +866,118 @@ class LazySupervisedDataset_ImgGen(Dataset):
                 data_dict['image'] = image
         elif self.data_args.is_multimodal:
             # image does not exist in the data, but the model is multimodal
-            data_dict['image'] = torch.zeros(6,7)
+            # this will skip in my_prepare_inputs_labels_for_multimodal, not input to the model
+            data_dict['image'] = torch.zeros(self.data_args.image_shape)
         return data_dict
 
+class LazySupervisedDataset_SmartWatch(Dataset):
+    """Dataset for supervised fine-tuning."""
+
+    def __init__(self, data_path: str,
+                 tokenizer: transformers.PreTrainedTokenizer,
+                 data_args: DataArguments):
+        super(LazySupervisedDataset_SmartWatch, self).__init__()
+        list_data_dict = json.load(open(data_path, "r"))
+        if data_args.generation_only:
+            list_data_dict = [e for e in list_data_dict if e['task']=="generation"]
+        if data_args.understanding_only:
+            list_data_dict = [e for e in list_data_dict if (e['task']=="vqa" or e['task']=="caption")]
+
+        rank0_print("Formatting inputs...Skip in lazy mode")
+        self.tokenizer = tokenizer
+        self.list_data_dict = list_data_dict
+        self.data_args = data_args
+
+    def __len__(self):
+        return len(self.list_data_dict)
+
+    @property
+    def modality_lengths(self):
+        length_list = []
+        for sample in self.list_data_dict:
+            cur_len = sum(len(conv['value'].split()) for conv in sample['conversations'])
+            cur_len = cur_len if 'image' in sample else -cur_len
+            length_list.append(cur_len)
+        return length_list
+
+    def __getitem__(self, i) -> Dict[str, torch.Tensor]:
+        sources = self.list_data_dict[i]
+        if isinstance(i, int):
+            sources = [sources]
+        assert len(sources) == 1, "Don't know why it is wrapped to a list"  # FIXME
+        if 'image' in sources[0]:
+            image_file = self.list_data_dict[i]['image']
+            image_folder = self.data_args.image_folder
+            if sources[0]['task']=='generation':
+                processor = self.data_args.image_processor_gen
+            else:
+                processor=self.data_args.image_processor
+            image = Image.open(os.path.join(image_folder, image_file)).convert('RGB')
+            if self.data_args.image_aspect_ratio == 'pad':
+                def expand2square(pil_img, background_color):
+                    width, height = pil_img.size
+                    if width == height:
+                        return pil_img
+                    elif width > height:
+                        result = Image.new(pil_img.mode, (width, width), background_color)
+                        result.paste(pil_img, (0, (width - height) // 2))
+                        return result
+                    else:
+                        result = Image.new(pil_img.mode, (height, height), background_color)
+                        result.paste(pil_img, ((height - width) // 2, 0))
+                        return result
+                image = expand2square(image, tuple(int(x*255) for x in processor.image_mean))
+                image = processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
+            else:
+                image = processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
+
+
+            sources = copy.deepcopy([e["conversations"] for e in sources])
+        else:
+            sources = copy.deepcopy([e["conversations"] for e in sources])
+        #bypass preprocess(), use default for llava1.5: preprocess_v1
+        data_dict = preprocess_v1_with_gen(
+            sources,
+            self.tokenizer,
+            has_image=('image' in self.list_data_dict[i]),
+            num_image_token=self.data_args.num_image_token
+        )
+        
+        if isinstance(i, int):
+            data_dict = dict(input_ids=data_dict["input_ids"][0],
+                             labels=data_dict["labels"][0],
+                             img_token_start=data_dict["img_token_start"])
+            #print(f"data_dict[img_token_start]:{data_dict['img_token_start']}")
+
+        # image exist in the data
+        if 'image' in self.list_data_dict[i]:
+            data_dict['image'] = image
+            #print(image.shape)
+        elif self.data_args.is_multimodal:
+            # image does not exist in the data, but the model is multimodal
+            # this will skip in my_prepare_inputs_labels_for_multimodal, not input to the model
+            data_dict['image'] = torch.zeros(self.data_args.image_shape)
+        return data_dict
 
 @dataclass
 class DataCollatorForSupervisedDataset(object):
     """Collate examples for supervised fine-tuning."""
 
     tokenizer: transformers.PreTrainedTokenizer
+    data_args: DataArguments
 
     def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
         input_ids, labels, img_token_start = tuple([instance[key] for instance in instances]
                                   for key in ("input_ids", "labels", "img_token_start"))
+
+        #generation padding sample
+        input_ids_pad=torch.ones((5+self.data_args.num_image_token,), dtype=torch.long)
+        labels_pad=torch.ones((5+self.data_args.num_image_token,), dtype=torch.long)
+        input_ids_pad[5:]=-300
+        labels_pad[5:]=-100
+        input_ids.append(input_ids_pad)
+        labels.append(labels_pad)
+
         input_ids = torch.nn.utils.rnn.pad_sequence(
             input_ids,
             batch_first=True,
@@ -887,6 +987,13 @@ class DataCollatorForSupervisedDataset(object):
                                                  padding_value=IGNORE_INDEX)
         input_ids = input_ids[:, :self.tokenizer.model_max_length]
         labels = labels[:, :self.tokenizer.model_max_length]
+        
+        img_token_start_pad=torch.ones((1,), dtype=torch.long)*5
+        # input_ids = torch.cat((input_ids, input_ids_pad), dim=0)
+        # labels = torch.cat((labels, labels_pad), dim=0)
+        img_token_start.append(img_token_start_pad)
+        image_pad=torch.zeros(self.data_args.image_shape, dtype=torch.float32,device=input_ids.device)
+
         batch = dict(
             input_ids=input_ids,
             labels=labels,
@@ -900,137 +1007,66 @@ class DataCollatorForSupervisedDataset(object):
                 batch['images'] = torch.stack(images)
             else:
                 batch['images'] = images
-
+            batch['images']= torch.cat((batch['images'], image_pad.unsqueeze(0)), dim=0)
+        #print(batch['images'].shape)
         return batch
-
-# class LazySupervisedDataset(Dataset):
-#     """Dataset for supervised fine-tuning."""
-
-#     def __init__(self, data_path: str,
-#                  tokenizer: transformers.PreTrainedTokenizer,
-#                  data_args: DataArguments):
-#         super(LazySupervisedDataset, self).__init__()
-#         list_data_dict = json.load(open(data_path, "r"))
-
-#         rank0_print("Formatting inputs...Skip in lazy mode")
-#         self.tokenizer = tokenizer
-#         self.list_data_dict = list_data_dict
-#         self.data_args = data_args
-
-#     def __len__(self):
-#         return len(self.list_data_dict)
-
-#     @property
-#     def lengths(self):
-#         length_list = []
-#         for sample in self.list_data_dict:
-#             img_tokens = 128 if 'image' in sample else 0
-#             length_list.append(sum(len(conv['value'].split()) for conv in sample['conversations']) + img_tokens)
-#         return length_list
-
-#     @property
-#     def modality_lengths(self):
-#         length_list = []
-#         for sample in self.list_data_dict:
-#             cur_len = sum(len(conv['value'].split()) for conv in sample['conversations'])
-#             cur_len = cur_len if 'image' in sample else -cur_len
-#             length_list.append(cur_len)
-#         return length_list
-
-#     def __getitem__(self, i) -> Dict[str, torch.Tensor]:
-#         sources = self.list_data_dict[i]
-#         if isinstance(i, int):
-#             sources = [sources]
-#         assert len(sources) == 1, "Don't know why it is wrapped to a list"  # FIXME
-#         if 'image' in sources[0]:
-#             image_file = self.list_data_dict[i]['image']
-#             image_folder = self.data_args.image_folder
-#             processor = self.data_args.image_processor
-#             image = Image.open(os.path.join(image_folder, image_file)).convert('RGB')
-#             if self.data_args.image_aspect_ratio == 'pad':
-#                 def expand2square(pil_img, background_color):
-#                     width, height = pil_img.size
-#                     if width == height:
-#                         return pil_img
-#                     elif width > height:
-#                         result = Image.new(pil_img.mode, (width, width), background_color)
-#                         result.paste(pil_img, (0, (width - height) // 2))
-#                         return result
-#                     else:
-#                         result = Image.new(pil_img.mode, (height, height), background_color)
-#                         result.paste(pil_img, ((height - width) // 2, 0))
-#                         return result
-#                 image = expand2square(image, tuple(int(x*255) for x in processor.image_mean))
-#                 image = processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
-#             else:
-#                 image = processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
-#             sources = preprocess_multimodal(
-#                 copy.deepcopy([e["conversations"] for e in sources]),
-#                 self.data_args)
-#         else:
-#             sources = copy.deepcopy([e["conversations"] for e in sources])
-#         data_dict = preprocess(
-#             sources,
-#             self.tokenizer,
-#             has_image=('image' in self.list_data_dict[i]))
-#         if isinstance(i, int):
-#             data_dict = dict(input_ids=data_dict["input_ids"][0],
-#                              labels=data_dict["labels"][0])
-
-#         # image exist in the data
-#         if 'image' in self.list_data_dict[i]:
-#             data_dict['image'] = image
-#         elif self.data_args.is_multimodal:
-#             # image does not exist in the data, but the model is multimodal
-#             crop_size = self.data_args.image_processor.crop_size
-#             data_dict['image'] = torch.zeros(3, crop_size['height'], crop_size['width'])
-#         return data_dict
-
-
-# @dataclass
-# class DataCollatorForSupervisedDataset(object):
-#     """Collate examples for supervised fine-tuning."""
-
-#     tokenizer: transformers.PreTrainedTokenizer
-
-#     def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
-#         input_ids, labels = tuple([instance[key] for instance in instances]
-#                                   for key in ("input_ids", "labels"))
-#         input_ids = torch.nn.utils.rnn.pad_sequence(
-#             input_ids,
-#             batch_first=True,
-#             padding_value=self.tokenizer.pad_token_id)
-#         labels = torch.nn.utils.rnn.pad_sequence(labels,
-#                                                  batch_first=True,
-#                                                  padding_value=IGNORE_INDEX)
-#         input_ids = input_ids[:, :self.tokenizer.model_max_length]
-#         labels = labels[:, :self.tokenizer.model_max_length]
-#         batch = dict(
-#             input_ids=input_ids,
-#             labels=labels,
-#             attention_mask=input_ids.ne(self.tokenizer.pad_token_id),
-#         )
-
-#         if 'image' in instances[0]:
-#             images = [instance['image'] for instance in instances]
-#             if all(x is not None and x.shape == images[0].shape for x in images):
-#                 batch['images'] = torch.stack(images)
-#             else:
-#                 batch['images'] = images
-
-#         return batch
-
 
 def make_supervised_data_module(tokenizer: transformers.PreTrainedTokenizer,
                                 data_args) -> Dict:
     """Make dataset and collator for supervised fine-tuning."""
-    train_dataset = LazySupervisedDataset_ImgGen(tokenizer=tokenizer,
-                                data_path=data_args.data_path,
-                                data_args=data_args)
-    data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
+    if data_args.dataset=='smartwatch':
+        train_dataset = LazySupervisedDataset_SmartWatch(tokenizer=tokenizer,
+                                    data_path=data_args.data_path,
+                                    data_args=data_args)
+    elif data_args.dataset=='segment_digit':
+        train_dataset = LazySupervisedDataset_ImgGen(tokenizer=tokenizer,
+                                    data_path=data_args.data_path,
+                                    data_args=data_args)
+    data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer,data_args=data_args)
     return dict(train_dataset=train_dataset,
                 eval_dataset=None,
                 data_collator=data_collator)
+
+
+from transformers import TrainerCallback
+import os
+
+class SaveCheckpointCallback(TrainerCallback):
+    def __init__(self, save_steps, training_args):
+        self.save_steps = save_steps
+        self.training_args = training_args
+        self.output_dir=training_args.output_dir
+
+    def on_step_end(self, args, state, control, **kwargs):
+        
+        # 检查是否需要保存
+        if (state.global_step % self.save_steps == 0) or (state.global_step==state.max_steps) or (state.global_step==1):
+            self.trainer.model.config.use_cache = True
+            output_dir = os.path.join(self.output_dir, f"checkpoint-{state.global_step}")
+            os.makedirs(output_dir, exist_ok=True)
+            self.trainer.args.output_dir = output_dir
+            self.trainer.save_state()
+
+            if self.training_args.lora_enable:
+                # 保存 LoRA 权重
+                state_dict = get_peft_state_maybe_zero_3(
+                    self.trainer.model.named_parameters(), self.training_args.lora_bias
+                )
+                non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
+                    self.trainer.model.named_parameters()
+                )
+                if self.training_args.local_rank == 0 or self.training_args.local_rank == -1:
+                    self.trainer.model.config.save_pretrained(output_dir)
+                    self.trainer.model.save_pretrained(output_dir, state_dict=state_dict)
+                    torch.save(non_lora_state_dict, os.path.join(output_dir, "non_lora_trainables.bin"))
+            else:
+                # 普通模型保存
+                safe_save_model_for_hf_trainer(trainer=self.trainer,
+                                       output_dir=output_dir)
+            self.trainer.model.config.use_cache = False
+            print(f"Checkpoint saved at step {state.global_step} to {output_dir}")
+
+
 
 
 def train(attn_implementation=None):
@@ -1164,7 +1200,11 @@ def train(attn_implementation=None):
         vision_tower = model.get_vision_tower()
         vision_tower.to(dtype=torch.bfloat16 if training_args.bf16 else torch.float16, device=training_args.device)
 
-        #data_args.image_processor = vision_tower.image_processor
+        vision_tower_gen = model.get_vision_tower_gen()
+        vision_tower_gen.to(dtype=torch.bfloat16 if training_args.bf16 else torch.float16, device=training_args.device)
+
+        data_args.image_processor = vision_tower.image_processor
+        data_args.image_processor_gen= vision_tower_gen.image_processor
         data_args.is_multimodal = True
 
         model.config.image_aspect_ratio = data_args.image_aspect_ratio
@@ -1174,12 +1214,22 @@ def train(attn_implementation=None):
         model.config.tune_mm_mlp_adapter = training_args.tune_mm_mlp_adapter = model_args.tune_mm_mlp_adapter
         if model_args.tune_mm_mlp_adapter:
             model.requires_grad_(False)
-            for p in model.get_model().mm_projector.parameters():
+            for p in model.get_model().mm_projector_un.parameters():
+                p.requires_grad = True
+            if model.get_model().mm_projector_gen is not None:
+                for p in model.get_model().mm_projector_gen.parameters():
+                    p.requires_grad = True
+            for p in model.get_model().mm_projector_head.parameters():
                 p.requires_grad = True
 
         model.config.freeze_mm_mlp_adapter = training_args.freeze_mm_mlp_adapter
         if training_args.freeze_mm_mlp_adapter:
-            for p in model.get_model().mm_projector.parameters():
+            if model.get_model().mm_projector_gen is not None:
+                for p in model.get_model().mm_projector_gen.parameters():
+                    p.requires_grad = False
+            for p in model.get_model().mm_projector_un.parameters():
+                p.requires_grad = False
+            for p in model.get_model().mm_projector_head.parameters():
                 p.requires_grad = False
 
         if training_args.bits in [4, 8]:
@@ -1189,7 +1239,7 @@ def train(attn_implementation=None):
         model.config.mm_projector_lr = training_args.mm_projector_lr
         training_args.use_im_start_end = model_args.mm_use_im_start_end
         model.config.mm_use_im_patch_token = model_args.mm_use_im_patch_token
-        model.initialize_vision_tokenizer(model_args, tokenizer=tokenizer)
+        #model.initialize_vision_tokenizer(model_args, tokenizer=tokenizer)
 
     if training_args.bits in [4, 8]:
         from peft.tuners.lora import LoraLayer
@@ -1206,33 +1256,52 @@ def train(attn_implementation=None):
 
     data_module = make_supervised_data_module(tokenizer=tokenizer,
                                               data_args=data_args)
-    trainer = LLaVATrainer(model=model,
-                    tokenizer=tokenizer,
-                    args=training_args,
-                    **data_module)
+    world_size = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
+    num_training_steps=int(len(data_module['train_dataset']) / training_args.per_device_train_batch_size / world_size)
+    save_steps=num_training_steps // training_args.num_ckpt_to_save
+    
+    print(f"num_training_steps:{num_training_steps}, save_steps:{save_steps}")
+    
+    #print(f"mm_projector_un open: {model.get_model().mm_projector_un[0].weight.requires_grad}")
+    callback=SaveCheckpointCallback(save_steps=save_steps, training_args=training_args)
+    trainer = LLaVATrainer(
+        model=model,
+        tokenizer=tokenizer,
+        args=training_args,
+        **data_module
+    )
+    callback.trainer = trainer
+    trainer.add_callback(callback)
 
+
+    # 这里需要传递 trainer 自身给 callback
+    #trainer.callback_handler.callbacks[0].trainer = trainer
+
+    # 开始训练
     if list(pathlib.Path(training_args.output_dir).glob("checkpoint-*")):
-        trainer.train(resume_from_checkpoint=True)
+        #trainer.train(resume_from_checkpoint=True)
+        trainer.train()
     else:
         trainer.train()
-    trainer.save_state()
 
-    model.config.use_cache = True
 
-    if training_args.lora_enable:
-        state_dict = get_peft_state_maybe_zero_3(
-            model.named_parameters(), training_args.lora_bias
-        )
-        non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
-            model.named_parameters()
-        )
-        if training_args.local_rank == 0 or training_args.local_rank == -1:
-            model.config.save_pretrained(training_args.output_dir)
-            model.save_pretrained(training_args.output_dir, state_dict=state_dict)
-            torch.save(non_lora_state_dict, os.path.join(training_args.output_dir, 'non_lora_trainables.bin'))
-    else:
-        safe_save_model_for_hf_trainer(trainer=trainer,
-                                       output_dir=training_args.output_dir)
+    # model.config.use_cache = True
+
+    # if training_args.lora_enable:
+    #     state_dict = get_peft_state_maybe_zero_3(
+    #         model.named_parameters(), training_args.lora_bias
+    #     )
+    #     non_lora_state_dict = get_peft_state_non_lora_maybe_zero_3(
+    #         model.named_parameters()
+    #     )
+    #     if training_args.local_rank == 0 or training_args.local_rank == -1:
+    #         model.config.save_pretrained(training_args.output_dir)
+    #         model.save_pretrained(training_args.output_dir, state_dict=state_dict)
+    #         torch.save(non_lora_state_dict, os.path.join(training_args.output_dir, 'non_lora_trainables.bin'))
+    # else:
+    #     safe_save_model_for_hf_trainer(trainer=trainer,
+    #                                    output_dir=training_args.output_dir)
+
 
 
 if __name__ == "__main__":

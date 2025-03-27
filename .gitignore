@@ -7,7 +7,6 @@ dist
 # Log
 *.log
 *.log.*
-*.json
 *.jsonl
 
 # Data
@@ -26,7 +25,7 @@ checkpoints
 ckpts*
 
 .ipynb_checkpoints
-*.ipynb
+
 
 # DevContainer
 !.devcontainer/*
