@@ -102,17 +102,18 @@ def generate_image(input_ids,model,num_image_tokens):
     return output_img
 
 #load trained model
-device='cuda:0'
-ckp_list=[156,312,468,624,780,936,1092,1248]
-model_name='llava-v1.5-7b-sw-lora'
-model_list=[f'/datadrive_a/jihai/LLaVA/scripts/v1_5/checkpoints/{model_name}/checkpoint-{i}' for i in ckp_list]
+device='cuda:5'
+ckp_list=[i*30 for i in range(1,11)]
+model_name='llava-v1.5-7b-sw-u-lora'
+model_list=[f'/public_data/jihai/understanding/scripts/v1_5/checkpoints/{model_name}/checkpoint-{i}' for i in ckp_list]
 for k in range(len(model_list)):
     args = type('Args', (), {
         "model_path": model_list[k],
-        "model_base": '/datadrive_a/tmp/vicuna-7b-v1.5/vicuna-7b-v1.5',
-        "data_path": '/datadrive_a/jihai/data/multimodalout/smart_watch_test.json',
-        "image_folder": '/datadrive_a/jihai/data/multimodalout/smart_watch_image_test',
+        "model_base": '/public_data/jihai/tmp/vicuna-7b-v1.5',
+        "data_path": '/public_data/jihai/data/multimodalout/smart_watch_test.json',
+        "image_folder": '/public_data/jihai/data/multimodalout/smart_watch_image_test',
         "answers_file": f"./answer/answer-{model_name}-{ckp_list[k]}.jsonl",
+        "answer_image_file": f"./answer/answer-{model_name}-{ckp_list[k]}-image",
         "conv_mode": "llava_v1",
         "num_chunks": 1,
         "chunk_idx": 0,
@@ -133,6 +134,7 @@ for k in range(len(model_list)):
 
     answers_file = args.answers_file
     os.makedirs(os.path.dirname(answers_file), exist_ok=True)
+    os.makedirs(args.answer_image_file, exist_ok=True)
     ans_file = open(answers_file, "w")
     if 'plain' in model_type and 'finetune' not in model_type.lower() and 'mmtag' not in args.conv_mode:
         args.conv_mode = args.conv_mode + '_mmtag'
@@ -178,17 +180,20 @@ for k in range(len(model_list)):
             if torch.equal(id_seq[i:i + sub_seq_len], img_indicator):
                 start_idx = i
                 break
-        img=None
+        img_file=None
         if start_idx != -1:
             output_ids=output_ids[:,1:start_idx+3]
             input_ids=torch.cat((input_ids, output_ids), dim=1)
             img=generate_image(input_ids,model,model.get_model().vision_tower.num_patches)
-            img=torch.stack(img,dim=0).squeeze().cpu().tolist()
+            img=torch.stack(img,dim=0).squeeze().cpu()
+            img_file=os.path.join(args.answer_image_file, f'{count}.pt')
+            torch.save(img, img_file)
+
         ans_file.write(json.dumps({"prompt": cur_prompt,
                                     "groun_truth": groun_truth,
                                     "answer": outputs,
                                     "groun_truth_img_tensor": groun_truth_img_tensor,
-                                    "output_img_tensor": img,
+                                    "output_img_file": img_file,
                                     "model_id": model_name,
                                     "metadata": {}}) + "\n")
         #outputs = tokenizer.batch_decode(input_ids, skip_special_tokens=False)[0].strip()

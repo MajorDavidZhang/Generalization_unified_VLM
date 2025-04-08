@@ -7,15 +7,16 @@
 #--vision_tower google/siglip-base-patch16-224 \
     # --vision_tower_gen synthetic \
     # --vision_tower_gen_path /datadrive_a/jihai/LLaVA/llava/model/multimodal_encoder/plain.pth\
-deepspeed --master_port 29505 --include=localhost:1,2 /datadrive_a/jihai/LLaVA/llava/train/train.py \
+# 禁用RoCE，强制使用本地总线
+deepspeed --master_port 29505 --include=localhost:6,7 /public_data/jihai/understanding/llava/train/train_mem.py \
     --lora_enable True --lora_r 128 --lora_alpha 256 --mm_projector_lr 1e-4 \
-    --deepspeed /datadrive_a/jihai/LLaVA/scripts/zero2.json \
-    --model_name_or_path /datadrive_a/tmp/vicuna-7b-v1.5/vicuna-7b-v1.5 \
+    --deepspeed /public_data/jihai/understanding/scripts/zero2.json \
+    --model_name_or_path /public_data/jihai/tmp/vicuna-7b-v1.5 \
     --version v1 \
-    --data_path /datadrive_a/jihai/data/multimodalout/smart_watch_train.json \
-    --image_folder /datadrive_a/jihai/data/multimodalout/smart_watch_image_train \
+    --data_path /public_data/jihai/data/multimodalout/smart_watch_train.json \
+    --image_folder /public_data/jihai/data/multimodalout/smart_watch_image_train \
     --vision_tower google/siglip-base-patch16-224 \
-    --vision_tower_path /datadrive_a/jihai/tmp\
+    --vision_tower_path /public_data/jihai/tmp/siglip-base-patch16-224\
     --mm_projector_type mlp \
     --mm_use_im_start_end False \
     --mm_use_im_patch_token False \
@@ -23,18 +24,17 @@ deepspeed --master_port 29505 --include=localhost:1,2 /datadrive_a/jihai/LLaVA/l
     --mm_vision_select_layer -2 \
     --image_aspect_ratio pad \
     --group_by_modality_length True \
-    --understanding_only False \
+    --understanding_only True \
     --dataset smartwatch \
     --image_loss cosine \
     --image_shape 3 224 224 \
     --num_image_token 196 \
-    --bf16 False \
-    --tf32 False \
-    --fp16 True \
-    --output_dir ./checkpoints/llava-v1.5-7b-sw-lora \
+    --bf16 True \
+    --tf32 True \
+    --output_dir ./checkpoints/llava-v1.5-7b-sw-u-lora \
     --num_ckpt_to_save 10 \
     --num_train_epochs 1 \
-    --per_device_train_batch_size 96 \
+    --per_device_train_batch_size 196 \
     --per_device_eval_batch_size 4 \
     --gradient_accumulation_steps 1 \
     --evaluation_strategy "no" \
@@ -50,4 +50,4 @@ deepspeed --master_port 29505 --include=localhost:1,2 /datadrive_a/jihai/LLaVA/l
     --gradient_checkpointing True \
     --dataloader_num_workers 4 \
     --lazy_preprocess True \
-    --report_to wandb
+    --report_to none

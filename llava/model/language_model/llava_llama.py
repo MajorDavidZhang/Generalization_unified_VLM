@@ -13,7 +13,7 @@
 #    limitations under the License.
 
 
-from types import NoneType
+NoneType=type(None)
 from typing import List, Optional, Tuple, Union
 
 import torch

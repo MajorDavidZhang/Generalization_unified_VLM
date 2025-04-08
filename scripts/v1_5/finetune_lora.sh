@@ -6,7 +6,7 @@
 #bs 85 if 3 gpu
     # --vision_tower_gen synthetic \
     # --vision_tower_gen_path /datadrive_a/jihai/LLaVA/llava/model/multimodal_encoder/plain.pth\
-deepspeed --master_port 29505 --include=localhost:1,2 /datadrive_a/jihai/LLaVA/llava/train/train.py \
+deepspeed --master_port 29505 --include=localhost:1,2 /datadrive_a/jihai/LLaVA/llava/train/train_mem.py \
     --lora_enable True --lora_r 128 --lora_alpha 256 --mm_projector_lr 1e-3 \
     --deepspeed /datadrive_a/jihai/LLaVA/scripts/zero2.json \
     --model_name_or_path /datadrive_a/tmp/vicuna-7b-v1.5/vicuna-7b-v1.5 \
