@@ -11,6 +11,8 @@ dist
 
 # Data
 !**/alpaca-data-conversation.json
+*.pt
+*.png
 
 # Editor
 .idea
