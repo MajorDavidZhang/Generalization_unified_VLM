@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 
 from torch.utils.data import Sampler
+from torch.utils.data import SequentialSampler
 
 from transformers import Trainer
 from transformers.trainer import (
@@ -145,6 +146,7 @@ class LLaVATrainer(Trainer):
                 group_by_modality=True,
             )
         else:
+            #return SequentialSampler(self.train_dataset)
             return super()._get_train_sampler()
 
     def create_optimizer(self):

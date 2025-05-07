@@ -1,5 +1,5 @@
 import os
-from .clip_encoder import CLIPVisionTower, CLIPVisionTowerS2,SyntheticVisionTower,SigLIPVisionTower
+from .clip_encoder import CLIPVisionTower, CLIPVisionTowerS2,SyntheticVisionTower,SigLIPVisionTower,VQVisionTower
 # from dataclasses import dataclass, field
 # from typing import Dict, Optional, Sequence, List
 
@@ -26,6 +26,8 @@ def build_vision_tower(vision_tower_cfg, **kwargs):
         return SyntheticVisionTower(vision_tower, args=vision_tower_cfg, **kwargs)
     elif 'siglip' in vision_tower.lower():
         return SigLIPVisionTower(vision_tower, args=vision_tower_cfg, **kwargs)
+    elif 'vq' in vision_tower.lower():
+        return VQVisionTower(vision_tower, args=vision_tower_cfg, **kwargs)
 
     raise ValueError(f'Unknown vision tower: {vision_tower}')
 

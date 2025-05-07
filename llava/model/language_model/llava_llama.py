@@ -14,8 +14,9 @@
 
 
 NoneType=type(None)
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Dict
 
+from httpx import get
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -67,7 +68,7 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
         use_cache: Optional[bool] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
-        images: Optional[torch.FloatTensor] = None,
+        images: Optional[Dict[str, torch.Tensor]]=None,
         image_sizes: Optional[List[List[int]]] = None,
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
@@ -131,13 +132,16 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
 
         logits = logits.float()
         loss = None
-        num_patches=self.get_model().vision_tower.num_patches
+        num_patches=self.get_model().vision_tower_gen.num_patches
 
         image_loss=None
-        if self.config.image_loss=='cosine':
+        if self.config.mm_projector_head_output_size!=self.config.mm_gen_hidden_size : #VQ output
+            image_loss=nn.CrossEntropyLoss(reduction='none')
+        elif self.config.image_loss=='cosine':
             image_loss=nn.CosineSimilarity(dim=-1)
         elif self.config.image_loss=='mse':
             image_loss=nn.MSELoss(reduction='none')
+        
 
         if labels is not None:
             # 将 img_token_start 转为张量，如果是 None 则用 -1 占位
@@ -168,21 +172,29 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
             # Enable model parallelism
             shift_labels = shift_labels.to(shift_logits.device)
             loss = loss_fct(shift_logits, shift_labels)
-            # loss_gen_fn = MSELoss(reduction='none')
-            # loss_gen=loss_gen_fn(self.get_model().mm_projector_head(img_embed_outputs), image_labels)
             projected_embed = self.get_model().mm_projector_head(img_embed_outputs)
 
-            
-            
-            loss_gen = image_loss(projected_embed, image_labels)
-            if self.config.image_loss=='cosine':
-                loss_gen = 1 - loss_gen
+            if isinstance(image_loss, nn.CrossEntropyLoss):
+       
+                patch_len=image_labels.shape[1]
+                batch_size=image_labels.shape[0]
+                image_labels = image_labels.view(-1)
+                projected_embed=projected_embed.view(-1, self.config.mm_projector_head_output_size)
+                # Enable model parallelism
+                image_labels = image_labels.to(projected_embed.device)
+                loss_gen = image_loss(projected_embed, image_labels)
+                loss_gen=loss_gen.view(batch_size, patch_len)
+            else:
+                loss_gen = image_loss(projected_embed, image_labels)
+                if self.config.image_loss=='cosine':
+                    loss_gen = 1 - loss_gen
             padding_mask=torch.ones((loss_gen.shape),device=loss_gen.device)
             padding_mask[-1]=0
             loss_gen*= padding_mask
             loss_gen=loss_gen.mean()
             print(f"loss_gen: {loss_gen}")
-            loss += loss_gen
+            alpha=getattr(self.config, 'alpha', 0.1)
+            loss += alpha*loss_gen
  
         if not return_dict:
             output = (logits,) + outputs[1:]
@@ -199,7 +211,7 @@ class LlavaLlamaForCausalLM_ImgGen(LlamaForCausalLM, LlavaMetaForCausalLM):
     def generate(
         self,
         inputs: Optional[torch.Tensor] = None,
-        images: Optional[torch.Tensor] = None,
+        images: Optional[Dict[str, torch.Tensor]]=None,
         image_sizes: Optional[torch.Tensor] = None,
         img_token_start: Optional[List[torch.LongTensor]] = [None],
         input_img_features=None,

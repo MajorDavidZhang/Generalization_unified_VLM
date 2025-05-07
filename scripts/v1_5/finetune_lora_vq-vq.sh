@@ -26,16 +26,16 @@ deepspeed --master_port 29515 --include=localhost:5,6,7 /public_data/jihai/under
     --mm_vision_select_layer -2 \
     --image_aspect_ratio pad \
     --group_by_modality_length False \
-    --generation_only True \
+    --generation_only False \
     --dataset smartwatch \
     --image_loss cosine \
-    --alpha 1 \
+    --alpha 0.2 \
     --image_shape_un 3 256 256 \
     --image_shape_gen 3 256 256 \
     --num_image_token 256 \
     --bf16 True \
     --tf32 True \
-    --output_dir ./checkpoints/llava-v1.5-7b-vq-vq-g-sw-lora \
+    --output_dir ./checkpoints/llava-v1.5-7b-vq-vq-2-sw-lora \
     --num_ckpt_to_save 10 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 131 \
@@ -61,20 +61,20 @@ sleep 10
 python eval_generate_smartwatch.py \
   --device "cuda:5" \
   --ckpt_start 1 \
-  --ckpt_step 15 \
+  --ckpt_step 45 \
   --ckpt_num 3 \
-  --model_name "llava-v1.5-7b-vq-vq-g-sw-lora" > output_gpu5.log 2>&1 &
+  --model_name "llava-v1.5-7b-vq-vq-2-sw-lora" > output_gpu5.log 2>&1 &
 
 python eval_generate_smartwatch.py \
   --device "cuda:6" \
   --ckpt_start 4 \
-  --ckpt_step 15 \
+  --ckpt_step 45 \
   --ckpt_num 3 \
-  --model_name "llava-v1.5-7b-vq-vq-g-sw-lora" > output_gpu6.log 2>&1 &
+  --model_name "llava-v1.5-7b-vq-vq-2-sw-lora" > output_gpu6.log 2>&1 &
 
 python eval_generate_smartwatch.py \
   --device "cuda:7" \
   --ckpt_start 7 \
-  --ckpt_step 15 \
+  --ckpt_step 45 \
   --ckpt_num 4 \
-  --model_name "llava-v1.5-7b-vq-vq-g-sw-lora" \
+  --model_name "llava-v1.5-7b-vq-vq-2-sw-lora" \

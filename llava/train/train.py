@@ -60,15 +60,19 @@ class ModelArguments:
     vision_tower_path: Optional[str] = field(default=None)
     vision_tower_gen: Optional[str] = field(default='same')
     vision_tower_gen_path: Optional[str] = field(default=None)
-    mm_projector_head_output_size: Optional[int] = field(default=None)
+    vision_tower_permutation_path: Optional[str] = field(default=None)
+    vision_tower_gen_permutation_path: Optional[str] = field(default=None)
+    mm_projector_head_output_size: Optional[int] = field(default=None) #for VQ need to set to 1
     mm_vision_select_layer: Optional[int] = field(default=-1)   # default to the last layer
     pretrained_mm_mlp_adapter: Optional[str] = field(default=None)
     mm_projector_type: Optional[str] = field(default='linear')
+    mm_projector_gen_type: Optional[str] = field(default=None)
     mm_use_im_start_end: bool = field(default=False)
     mm_use_im_patch_token: bool = field(default=True)
     mm_patch_merge_type: Optional[str] = field(default='flat')
     mm_vision_select_feature: Optional[str] = field(default="patch")
     image_loss: Optional[str] = field(default='mse')
+    alpha: Optional[float] = field(default=1.0)
     
 
 
@@ -85,10 +89,13 @@ class DataArguments:
     multimodal_out: bool=True
     understanding_only: bool=False
     generation_only: bool=False
-    image_shape: List[int] = field(
+    image_shape_un: List[int] = field(
         default_factory=lambda: [6,7],
     )
-    num_image_token: int = 6 #how many token will one image take up
+    image_shape_gen: List[int] = field(
+        default_factory=lambda: [6,7],
+    )
+    num_image_token: int = 6 #how many token will one image take up in generation
     dataset: str = 'segment_digit'
 
 @dataclass
@@ -926,7 +933,8 @@ class LazySupervisedDataset_SmartWatch(Dataset):
                         result = Image.new(pil_img.mode, (height, height), background_color)
                         result.paste(pil_img, ((height - width) // 2, 0))
                         return result
-                image = expand2square(image, tuple(int(x*255) for x in processor.image_mean))
+                if image.size[0] != image.size[1]:
+                    image = expand2square(image, tuple(int(x*255) for x in processor.image_mean))
                 image = processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
             else:
                 image = processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
@@ -953,7 +961,7 @@ class LazySupervisedDataset_SmartWatch(Dataset):
         if 'image' in self.list_data_dict[i]:
             data_dict['image'] = image
             #print(image.shape)
-        elif self.data_args.is_multimodal:
+        elif self.data_args.is_multimodal:  # need to consider image_shape_un or image_shape_gen
             # image does not exist in the data, but the model is multimodal
             # this will skip in my_prepare_inputs_labels_for_multimodal, not input to the model
             data_dict['image'] = torch.zeros(self.data_args.image_shape)
@@ -992,7 +1000,7 @@ class DataCollatorForSupervisedDataset(object):
         # input_ids = torch.cat((input_ids, input_ids_pad), dim=0)
         # labels = torch.cat((labels, labels_pad), dim=0)
         img_token_start.append(img_token_start_pad)
-        image_pad=torch.zeros(self.data_args.image_shape, dtype=torch.float32,device=input_ids.device)
+        image_pad=torch.zeros(self.data_args.image_shape_gen, dtype=torch.float32,device=input_ids.device)
 
         batch = dict(
             input_ids=input_ids,
@@ -1002,12 +1010,27 @@ class DataCollatorForSupervisedDataset(object):
         )
 
         if 'image' in instances[0]:
-            images = [instance['image'] for instance in instances]
-            if all(x is not None and x.shape == images[0].shape for x in images):
-                batch['images'] = torch.stack(images)
+            images_un=[instance['image'] for instance in instances if instance['img_token_start'] is None]
+            images_gen=[instance['image'] for instance in instances if instance['img_token_start'] is not None]
+            images={}
+
+            if len(images_un)>0:
+                images['images_un']=torch.stack(images_un)
             else:
-                batch['images'] = images
-            batch['images']= torch.cat((batch['images'], image_pad.unsqueeze(0)), dim=0)
+                images['images_un']=torch.zeros([0]+self.data_args.image_shape_un)
+            
+            # images = [instance['image'] for instance in instances]
+            # if all(x is not None and x.shape == images[0].shape for x in images):
+            #     batch['images'] = torch.stack(images)
+            # else:
+            #     batch['images'] = images
+            if len(images_gen)>0:
+                images['images_gen']=torch.stack(images_gen)
+                images['images_gen']= torch.cat((images['images_gen'], image_pad.unsqueeze(0)), dim=0)
+            else:
+                images['images_gen']=image_pad.unsqueeze(0)
+
+            batch['images'] = images
         #print(batch['images'].shape)
         return batch
 

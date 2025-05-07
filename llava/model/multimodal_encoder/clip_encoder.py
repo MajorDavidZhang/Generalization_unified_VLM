@@ -4,6 +4,128 @@ import torch.nn.functional as F
 
 from transformers import CLIPVisionModel, CLIPImageProcessor, CLIPVisionConfig
 from transformers import SiglipImageProcessor, SiglipVisionModel,SiglipVisionConfig
+from torchvision import transforms
+from PIL import Image
+from .vq_model import VQ_models
+
+class VQArgs():
+    def __init__(self):
+        self.image_path = "/public_data/jihai/data/multimodalout/smart_watch_image_test/1.png"
+        self.vq_model = "VQ-16"
+        self.vq_ckpt = '/public_data/jihai/tmp/vq_ds16_c2i.pt'
+        self.codebook_size = 16384
+        self.codebook_embed_dim = 8
+        self.image_size = 256
+        self.seed = 0
+
+class VQImageProcessor:
+    def __init__(self, input_size):
+        self.transform = transforms.Compose([
+            transforms.Resize((input_size, input_size)),  # 调整尺寸
+            transforms.ToTensor()                        # 转换为Tensor并自动归一化到[0,1
+        ])
+        self.image_mean=[0.5, 0.5, 0.5]
+
+    def preprocess(self, image,return_tensors='pt'):
+        image = self.transform(image)
+        image=2.0*image-1.0
+        # 添加批次维度并返回
+        image=image.unsqueeze(0)
+        out={'pixel_values':image}
+        return out
+
+
+class VQVisionTower(nn.Module):
+    def __init__(self, vision_tower, args, delay_load=False):
+        super().__init__()
+
+        self.is_loaded = False
+
+        self.vision_tower_name = vision_tower
+        self.vq_cfg= VQArgs()
+        #self.select_layer = args.mm_vision_select_layer
+        #self.select_feature = getattr(args, 'mm_vision_select_feature', 'patch')
+
+        if not delay_load:
+            self.load_model()
+        elif getattr(args, 'unfreeze_mm_vision_tower', False):
+            self.load_model()
+        else:
+           self.cfg_only = self.vq_cfg
+
+    def load_model(self, device_map=None):
+        if self.is_loaded:
+            print('{} is already loaded, `load_model` called again, skipping.'.format(self.vision_tower_name))
+            return
+
+        self.image_processor = VQImageProcessor(self.vq_cfg.image_size)
+        self.vision_tower = VQ_models[self.vq_cfg.vq_model](codebook_size=self.vq_cfg.codebook_size,
+                                                                       codebook_embed_dim=self.vq_cfg.codebook_embed_dim)
+        self.vision_tower.eval()
+        self.vision_tower.requires_grad_(False)
+   
+        checkpoint = torch.load(self.vq_cfg.vq_ckpt, map_location="cpu")
+        if "ema" in checkpoint:  # ema
+            model_weight = checkpoint["ema"]
+        elif "model" in checkpoint:  # ddp
+            model_weight = checkpoint["model"]
+        elif "state_dict" in checkpoint:
+            model_weight = checkpoint["state_dict"]
+        else:
+            raise Exception("please check model weight")
+        self.vision_tower.load_state_dict(model_weight)
+        del checkpoint
+
+        self.is_loaded = True
+
+
+    @torch.no_grad()
+    def forward(self, images):
+        if type(images) is list:
+            image_features = []
+            image_indices=[]
+            for image in images:
+                latent, _, [_, _, indices] = self.vision_tower.encode(image.to(device=self.device, dtype=self.dtype).unsqueeze(0))
+                latent = latent.to(image.dtype)
+                image_features.append(latent)
+                image_indices.append(indices)
+        else:
+          
+            image_features, _, [_, _, image_indices] = self.vision_tower.encode(images.to(device=self.device, dtype=self.dtype))
+            image_features = image_features.to(images.dtype)
+
+        return (image_features,image_indices)
+
+    @property
+    def dummy_feature(self):
+        return torch.zeros(1, self.hidden_size, device=self.device, dtype=self.dtype)
+
+    @property
+    def dtype(self):
+        return self.vision_tower.dtype
+
+    @property
+    def device(self):
+        return self.vision_tower.device
+
+    @property
+    def config(self):
+        if self.is_loaded:
+            return self.vision_tower.config
+        else:
+            return self.cfg_only
+
+    @property
+    def hidden_size(self):
+        return 8
+
+    @property
+    def num_patches_per_side(self):
+        return 16
+
+    @property
+    def num_patches(self):
+        return 256
 
 
 class CLIPVisionTower(nn.Module):
@@ -89,6 +211,20 @@ class CLIPVisionTower(nn.Module):
     def num_patches(self):
         return (self.config.image_size // self.config.patch_size) ** 2
 
+class Affine(nn.Module):
+    def __init__(self, dim):
+        super(Affine, self).__init__()
+        
+        self.register_buffer('A', torch.zeros(dim,dim))  # register_buffer 确保 A 不可训练
+        self.register_buffer('b', torch.zeros(dim))  # 随机平移向量 b，不可训练
+
+    def forward(self, x, *args, **kwargs):
+        seq_len=x.shape[1]
+        x=x.reshape(-1, self.A.shape[1])
+        y=torch.matmul(x,self.A) + self.b
+        y=y.view(-1, seq_len, self.A.shape[0])
+        return y
+
 class SigLIPVisionTower(nn.Module):
     def __init__(self, vision_tower, args, delay_load=False):
         super().__init__()
@@ -112,11 +248,17 @@ class SigLIPVisionTower(nn.Module):
             print('{} is already loaded, `load_model` called again, skipping.'.format(self.vision_tower_name))
             return
         self.image_processor = SiglipImageProcessor.from_pretrained(self.vision_tower_name,cache_dir=self.args.vision_tower_path)
-        #self.image_processor = CLIPImageProcessor.from_pretrained(self.vision_tower_name)
         self.vision_tower=SiglipVisionModel.from_pretrained(self.vision_tower_name, device_map=device_map,cache_dir=self.args.vision_tower_path)
-        #self.vision_tower = CLIPVisionModel.from_pretrained(self.vision_tower_name, device_map=device_map)
         self.vision_tower.requires_grad_(False)
 
+        if self.args.vision_tower_permutation_path is None:
+            self.permutation=nn.Identity()
+        else:
+            print(f"load vision permutation at {self.args.vision_tower_permutation_path}")
+            state=torch.load(self.args.vision_tower_permutation_path)
+            self.permutation=Affine(self.vision_tower.config.hidden_size)
+            self.permutation.load_state_dict(state)
+            self.permutation.requires_grad_(False)
         self.is_loaded = True
 
     def feature_select(self, image_forward_outs):
@@ -135,11 +277,14 @@ class SigLIPVisionTower(nn.Module):
             image_features = []
             for image in images:
                 image_forward_out = self.vision_tower(image.to(device=self.device, dtype=self.dtype).unsqueeze(0), output_hidden_states=True)
+
                 image_feature = self.feature_select(image_forward_out).to(image.dtype)
+                image_feature = self.permutation(image_feature)
                 image_features.append(image_feature)
         else:
             image_forward_outs = self.vision_tower(images.to(device=self.device, dtype=self.dtype), output_hidden_states=True)
             image_features = self.feature_select(image_forward_outs).to(images.dtype)
+            image_features = self.permutation(image_features)
 
         return image_features
 
@@ -174,24 +319,7 @@ class SigLIPVisionTower(nn.Module):
     def num_patches(self):
         return (self.config.image_size // self.config.patch_size) ** 2
 
-class Affine(nn.Module):
-    def __init__(self, dim):
-        super(Affine, self).__init__()
-        
-        # 生成随机正交矩阵 A（使用 QR 分解）
-        random_matrix = torch.randn(dim, dim)
-        # QR 分解得到正交矩阵 Q
-        Q, _ = torch.qr(random_matrix)
-        
-        # 将 A 和 b 作为常量属性存储，并确保它们不会被训练
-        self.register_buffer('A', Q)  # register_buffer 确保 A 不可训练
-        self.register_buffer('b', torch.randn(dim))  # 随机平移向量 b，不可训练
 
-    def forward(self, x, *args, **kwargs):
-        x=x.view(-1, self.A.shape[1])
-        y=torch.matmul(x,self.A) + self.b
-        y=y.view(-1, 6, self.A.shape[0])
-        return y
 
 
 class SyntheticVisionTower(nn.Module):
