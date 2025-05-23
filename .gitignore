@@ -8,6 +8,7 @@ dist
 *.log
 *.log.*
 *.jsonl
+*.json
 
 # Data
 !**/alpaca-data-conversation.json
@@ -26,8 +27,9 @@ checkpoints
 answer
 ckpts*
 
-.ipynb_checkpoints
-.pt
+*.ipynb_checkpoints
+*.pt
+*.pth
 
 
 # DevContainer
