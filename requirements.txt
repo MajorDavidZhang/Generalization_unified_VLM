@@ -45,7 +45,6 @@ fairscale==0.4.13
 fastapi==0.115.12
 ffmpy==0.5.0
 filelock==3.18.0
-flash_attn @ file:///public_data/jihai/flash_attn-2.7.4.post1%2Bcu12torch2.6cxx11abiFALSE-cp39-cp39-linux_x86_64.whl#sha256=b7c0c927aacbaac379f0186cad5310d3c948a62254ce9e02409354fe42c7d7ca
 fonttools==4.56.0
 frozenlist==1.5.0
 fsspec==2023.10.0
@@ -84,8 +83,6 @@ kiwisolver==1.4.7
 latex2mathml==3.77.0
 latex2sympy2==1.9.1
 lightning-utilities==0.14.3
--e git+https://github.com/MajorDavidZhang/understanding.git@97ea2e8f5269e2749b80e0b8bfbd39a446bd7f49#egg=llava
--e git+https://github.com/EvolvingLMMs-Lab/lmms-eval.git@a5cc3450be83eb3089cb10c72561efef40cdac04#egg=lmms_eval
 loguru==0.7.3
 lxml==5.4.0
 markdown-it-py==3.0.0

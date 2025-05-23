@@ -2,7 +2,7 @@
 deepspeed --master_port 29516 --include=localhost:5,6,7 ./llava/train/train_mem.py \
     --lora_enable True --lora_r 128 --lora_alpha 256 --mm_projector_lr 1e-4 \
     --deepspeed ./scripts/zero2.json \
-    --model_name_or_path /public_data/jihai/tmp/vicuna-7b-v1.5 \
+    --model_name_or_path .../vicuna-7b-v1.5 \
     --version v1 \
     --data_path .../smart_watch_train.json \
     --image_folder .../smart_watch_image_train \
