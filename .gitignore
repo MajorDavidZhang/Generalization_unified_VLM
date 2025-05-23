@@ -22,7 +22,7 @@ dist
 .DS_Store
 wandb
 output
-*/logs
+logs
 
 checkpoints
 answer
