@@ -10,9 +10,8 @@ from .vq_model import VQ_models
 
 class VQArgs():
     def __init__(self):
-        self.image_path = "/public_data/jihai/data/multimodalout/smart_watch_image_test/1.png"
         self.vq_model = "VQ-16"
-        self.vq_ckpt = '/public_data/jihai/tmp/vq_ds16_c2i.pt'
+        self.vq_ckpt = './vq_ds16_c2i.pt'
         self.codebook_size = 16384
         self.codebook_embed_dim = 8
         self.image_size = 256

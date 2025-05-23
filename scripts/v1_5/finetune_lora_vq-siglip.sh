@@ -1,24 +1,13 @@
-#!/bin/bash
-#export CUDA_VISIBLE_DEVICES=1,2,3
-#--generation_only True \
-#deepspeed --master_port 29501 --include=localhost:2,3 /datadrive_a/jihai/LLaVA/llava/train/train.py \
-#siglip have no cls token, mm_vision_select_feature should be set to cls_patch
-#bs 85 if 3 gpu
-#--vision_tower google/siglip-base-patch16-224 \
-    # --vision_tower_gen synthetic \
-    # --vision_tower_gen_path /datadrive_a/jihai/LLaVA/llava/model/multimodal_encoder/plain.pth\
-    # --vision_tower_permutation_path /public_data/jihai/understanding/llava/model/multimodal_encoder/siglip_affine_1.pth\
-# 禁用RoCE，强制使用本地总线
-export HF_ENDPOINT=https://hf-mirror.com
-deepspeed --master_port 29515 --include=localhost:2,3,4 /public_data/jihai/understanding/llava/train/train_mem.py \
+
+deepspeed --master_port 29515 --include=localhost:2,3,4 ./llava/train/train_mem.py \
     --lora_enable True --lora_r 128 --lora_alpha 256 --mm_projector_lr 1e-4 \
-    --deepspeed /public_data/jihai/understanding/scripts/zero2.json \
+    --deepspeed ./scripts/zero2.json \
     --model_name_or_path /public_data/jihai/tmp/vicuna-7b-v1.5 \
     --version v1 \
-    --data_path /public_data/jihai/data/multimodalout/smart_watch_image_train_u_weather_biased.json \
-    --image_folder /public_data/jihai/data/multimodalout/smart_watch_image_train_u_weather_biased \
+    --data_path .../smart_watch_train.json \
+    --image_folder .../smart_watch_image_train \
     --vision_tower_gen google/siglip-base-patch16-224 \
-    --vision_tower_gen_path /public_data/jihai/tmp/siglip-base-patch16-224\
+    --vision_tower_gen_path .../siglip-base-patch16-224\
     --vision_tower vq \
     --mm_projector_type linear \
     --mm_projector_gen_type mlp \
@@ -36,7 +25,7 @@ deepspeed --master_port 29515 --include=localhost:2,3,4 /public_data/jihai/under
     --num_image_token 196 \
     --bf16 True \
     --tf32 True \
-    --output_dir ./checkpoints/llava-v1.5-7b-vq-siglip_u_weather_biased-sw-lora \
+    --output_dir ./checkpoints/llava-v1.5-7b-vq-siglip-lora \
     --num_ckpt_to_save 10 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 131 \
@@ -59,26 +48,11 @@ deepspeed --master_port 29515 --include=localhost:2,3,4 /public_data/jihai/under
 
 sleep 10
 
-python eval_generate_smartwatch.py \
-  --device "cuda:2" \
-  --ckpt_start 1 \
+# evaluate ckpt 10 only
+python eval_generate.py \
+  --device "cuda:7" \
+  --ckpt_start 10 \
   --ckpt_step 45 \
-  --ckpt_num 3 \
-  --model_name "llava-v1.5-7b-vq-siglip_u_weather_biased-sw-lora"\
-  --understanding_only > output_gpu2.log 2>&1 &
+  --ckpt_num 1 \
+  --model_name "llava-v1.5-7b-vq-siglip-lora" \
 
-python eval_generate_smartwatch.py \
-  --device "cuda:3" \
-  --ckpt_start 4 \
-  --ckpt_step 45 \
-  --ckpt_num 3 \
-  --model_name "llava-v1.5-7b-vq-siglip_u_weather_biased-sw-lora"\
-  --understanding_only > output_gpu3.log 2>&1 &
-
-python eval_generate_smartwatch.py \
-  --device "cuda:4" \
-  --ckpt_start 7 \
-  --ckpt_step 45 \
-  --ckpt_num 4 \
-  --model_name "llava-v1.5-7b-vq-siglip_u_weather_biased-sw-lora" \
-  --understanding_only
