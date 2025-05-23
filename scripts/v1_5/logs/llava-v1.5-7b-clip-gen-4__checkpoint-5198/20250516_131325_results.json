@@ -1,0 +1,685 @@
+{
+  "results": {
+    "gqa": {
+      "alias": "gqa",
+      "exact_match,none": 0.6163141993957704,
+      "exact_match_stderr,none": 0.004336111287450473
+    },
+    "mmbench_en": {
+      " ": " ",
+      "alias": "mmbench_en"
+    },
+    "mmbench_en_dev": {
+      "alias": " - mmbench_en_dev",
+      "gpt_eval_score,none": 62.54295532646048,
+      "gpt_eval_score_stderr,none": "N/A",
+      "submission,none": null,
+      "submission_stderr,none": "N/A"
+    },
+    "mmbench_en_test": {
+      "alias": " - mmbench_en_test",
+      "gpt_eval_score,none": [],
+      "gpt_eval_score_stderr,none": [],
+      "submission,none": null,
+      "submission_stderr,none": "N/A"
+    },
+    "mme": {
+      "alias": "mme",
+      "mme_cognition_score,none": 315.0,
+      "mme_cognition_score_stderr,none": "N/A",
+      "mme_perception_score,none": 1519.0157062825128,
+      "mme_perception_score_stderr,none": "N/A"
+    },
+    "mmstar": {
+      "alias": "mmstar",
+      "coarse perception,none": 0.6129002927218439,
+      "coarse perception_stderr,none": "N/A",
+      "average,none": 0.3409141277438621,
+      "average_stderr,none": "N/A",
+      "fine-grained perception,none": 0.29495210022107593,
+      "fine-grained perception_stderr,none": "N/A",
+      "instance reasoning,none": 0.38335633732516666,
+      "instance reasoning_stderr,none": "N/A",
+      "logical reasoning,none": 0.3050882011278051,
+      "logical reasoning_stderr,none": "N/A",
+      "math,none": 0.23075937806290656,
+      "math_stderr,none": "N/A",
+      "science & technology,none": 0.21842845700437455,
+      "science & technology_stderr,none": "N/A"
+    },
+    "mmvet": {
+      "alias": "mmvet",
+      "gpt_eval_score,none": 0.0,
+      "gpt_eval_score_stderr,none": "N/A"
+    },
+    "vizwiz_vqa": {
+      " ": " ",
+      "alias": "vizwiz_vqa"
+    },
+    "vizwiz_vqa_test": {
+      "alias": " - vizwiz_vqa_test",
+      "exact_match,none": [],
+      "exact_match_stderr,none": [],
+      "submission,none": null,
+      "submission_stderr,none": "N/A"
+    },
+    "vizwiz_vqa_val": {
+      "alias": " - vizwiz_vqa_val",
+      "exact_match,none": 0.5853438295901835,
+      "exact_match_stderr,none": 0.006763122631882655,
+      "submission,none": [],
+      "submission_stderr,none": []
+    }
+  },
+  "group_subtasks": {
+    "gqa": [],
+    "mmbench_en": [
+      "mmbench_en_dev",
+      "mmbench_en_test"
+    ],
+    "mme": [],
+    "mmstar": [],
+    "mmvet": [],
+    "vizwiz_vqa": [
+      "vizwiz_vqa_val",
+      "vizwiz_vqa_test"
+    ]
+  },
+  "configs": {
+    "gqa": {
+      "task": "gqa",
+      "dataset_path": "lmms-lab/GQA",
+      "dataset_name": "testdev_balanced_instructions",
+      "dataset_kwargs": {
+        "token": true
+      },
+      "test_split": "testdev",
+      "full_docs": false,
+      "process_results_use_image": false,
+      "doc_to_visual": "<function gqa_doc_to_visual at 0x7fdb9bb48b80>",
+      "doc_to_text": "<function gqa_doc_to_text at 0x7fdb9bb48dc0>",
+      "doc_to_target": "answer",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "exact_match",
+          "aggregation": "mean",
+          "higher_is_better": true,
+          "ignore_case": true,
+          "ignore_punctuation": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "max_new_tokens": 16,
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "num_beams": 1,
+        "do_sample": false,
+        "until": [
+          "\n\n"
+        ]
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": [
+        {
+          "version": 0.0
+        }
+      ],
+      "lmms_eval_specific_kwargs": {
+        "default": {
+          "pre_prompt": "",
+          "post_prompt": "\nAnswer the question using a single word or phrase."
+        },
+        "qwen_vl": {
+          "pre_prompt": "",
+          "post_prompt": " Answer:"
+        },
+        "pre_prompt": "",
+        "post_prompt": "\nAnswer the question using a single word or phrase."
+      }
+    },
+    "mmbench_en_dev": {
+      "task": "mmbench_en_dev",
+      "dataset_path": "lmms-lab/MMBench",
+      "dataset_name": "en",
+      "dataset_kwargs": {
+        "token": true
+      },
+      "test_split": "dev",
+      "full_docs": false,
+      "process_results_use_image": false,
+      "doc_to_visual": "<function mmbench_doc_to_visual at 0x7fdb9bb32280>",
+      "doc_to_text": "<function mmbench_doc_to_text at 0x7fdb9bb32940>",
+      "doc_to_target": "answer",
+      "process_results": "<function mmbench_process_results at 0x7fdb9bb32ee0>",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "gpt_eval_score",
+          "aggregation": "<function mmbench_aggregate_dev_results_eval at 0x7fdb9bb1ea60>",
+          "higher_is_better": true
+        },
+        {
+          "metric": "submission",
+          "aggregation": "<function mmbench_aggregate_dev_results_submission at 0x7fdb9bb32040>",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "until": [
+          "ASSISTANT:"
+        ],
+        "max_new_tokens": 1024,
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "num_beams": 1,
+        "do_sample": false,
+        "image_aspect_ratio": "original"
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "lmms_eval_specific_kwargs": {
+        "default": {
+          "pre_prompt": "",
+          "post_prompt": "\nAnswer with the option's letter from the given choices directly."
+        },
+        "pre_prompt": "",
+        "post_prompt": "\nAnswer with the option's letter from the given choices directly."
+      },
+      "model_specific_generation_kwargs": {
+        "llava": {
+          "image_aspect_ratio": "original"
+        }
+      }
+    },
+    "mmbench_en_test": {
+      "task": "mmbench_en_test",
+      "dataset_path": "lmms-lab/MMBench",
+      "dataset_name": "en",
+      "dataset_kwargs": {
+        "token": true
+      },
+      "test_split": "test",
+      "full_docs": false,
+      "process_results_use_image": false,
+      "doc_to_visual": "<function mmbench_doc_to_visual at 0x7fdb9ba7b820>",
+      "doc_to_text": "<function mmbench_doc_to_text at 0x7fdb9ba7bee0>",
+      "doc_to_target": "answer",
+      "process_results": "<function mmbench_process_results at 0x7fdb9b7c94c0>",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "submission",
+          "aggregation": "<function mmbench_aggregate_test_results at 0x7fdb9ba47940>",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "until": [
+          "ASSISTANT:"
+        ],
+        "max_new_tokens": 1024,
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "num_beams": 1,
+        "do_sample": false,
+        "image_aspect_ratio": "original"
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "lmms_eval_specific_kwargs": {
+        "default": {
+          "pre_prompt": "",
+          "post_prompt": "\nAnswer with the option's letter from the given choices directly."
+        },
+        "pre_prompt": "",
+        "post_prompt": "\nAnswer with the option's letter from the given choices directly."
+      },
+      "model_specific_generation_kwargs": {
+        "llava": {
+          "image_aspect_ratio": "original"
+        }
+      }
+    },
+    "mme": {
+      "task": "mme",
+      "dataset_path": "lmms-lab/MME",
+      "dataset_kwargs": {
+        "token": true
+      },
+      "test_split": "test",
+      "full_docs": false,
+      "process_results_use_image": false,
+      "doc_to_visual": "<function mme_doc_to_visual at 0x7fdbb77a7e50>",
+      "doc_to_text": "<function mme_doc_to_text at 0x7fdb9b7059d0>",
+      "doc_to_target": "answer",
+      "process_results": "<function mme_process_results at 0x7fdb9b705d30>",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "mme_perception_score",
+          "aggregation": "<function mme_aggregate_results at 0x7fdb9b711280>",
+          "higher_is_better": true
+        },
+        {
+          "metric": "mme_cognition_score",
+          "aggregation": "<function mme_aggregate_results at 0x7fdb9b711700>",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "max_new_tokens": 16,
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "num_beams": 1,
+        "do_sample": false,
+        "until": [
+          "\n\n"
+        ]
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": [
+        {
+          "version": 0.0
+        }
+      ],
+      "lmms_eval_specific_kwargs": {
+        "default": {
+          "pre_prompt": "",
+          "post_prompt": "\nAnswer the question using a single word or phrase."
+        },
+        "gpt4v": {
+          "pre_prompt": "",
+          "post_prompt": "\nAnswer the question with Yes or No."
+        },
+        "qwen_vl": {
+          "pre_prompt": "",
+          "post_prompt": " Answer:"
+        },
+        "otterhd": {
+          "pre_prompt": "",
+          "post_prompt": " Answer:"
+        },
+        "xcomposer2_4khd": {
+          "pre_prompt": "[UNUSED_TOKEN_146]user\n",
+          "post_prompt": " Answer this question briefly[UNUSED_TOKEN_145]\n[UNUSED_TOKEN_146]assistant\n"
+        },
+        "plm": {
+          "pre_prompt": "",
+          "post_prompt": ""
+        },
+        "pre_prompt": "",
+        "post_prompt": "\nAnswer the question using a single word or phrase."
+      }
+    },
+    "mmstar": {
+      "task": "mmstar",
+      "dataset_path": "Lin-Chen/MMStar",
+      "dataset_kwargs": {
+        "token": true
+      },
+      "test_split": "val",
+      "full_docs": false,
+      "process_results_use_image": false,
+      "doc_to_visual": "<function mmstar_doc_to_visual at 0x7fdb9b705820>",
+      "doc_to_text": "<function mmstar_doc_to_text at 0x7fdb9b711af0>",
+      "doc_to_target": "answer",
+      "process_results": "<function mmstar_process_results at 0x7fdb9b737040>",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "coarse perception",
+          "aggregation": "<function mmstar_aggregate_results at 0x7fdb9b7374c0>",
+          "higher_is_better": true
+        },
+        {
+          "metric": "fine-grained perception",
+          "aggregation": "<function mmstar_aggregate_results at 0x7fdb9b7378b0>",
+          "higher_is_better": true
+        },
+        {
+          "metric": "instance reasoning",
+          "aggregation": "<function mmstar_aggregate_results at 0x7fdb9b737ca0>",
+          "higher_is_better": true
+        },
+        {
+          "metric": "logical reasoning",
+          "aggregation": "<function mmstar_aggregate_results at 0x7fdb9b73b0d0>",
+          "higher_is_better": true
+        },
+        {
+          "metric": "science & technology",
+          "aggregation": "<function mmstar_aggregate_results at 0x7fdb9b73b4c0>",
+          "higher_is_better": true
+        },
+        {
+          "metric": "math",
+          "aggregation": "<function mmstar_aggregate_results at 0x7fdb9b73b8b0>",
+          "higher_is_better": true
+        },
+        {
+          "metric": "average",
+          "aggregation": "<function mmstar_aggregate_results at 0x7fdb9b73bca0>",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "until": [
+          "\n\n"
+        ],
+        "do_sample": false
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": [
+        {
+          "version": 0.0
+        }
+      ],
+      "lmms_eval_specific_kwargs": {
+        "default": {
+          "pre_prompt": "",
+          "post_prompt": "\nAnswer with the option's letter from the given choices directly"
+        },
+        "pre_prompt": "",
+        "post_prompt": "\nAnswer with the option's letter from the given choices directly"
+      }
+    },
+    "mmvet": {
+      "task": "mmvet",
+      "dataset_path": "lmms-lab/MMVet",
+      "dataset_kwargs": {
+        "token": true
+      },
+      "test_split": "test",
+      "full_docs": false,
+      "process_results_use_image": false,
+      "doc_to_visual": "<function mmvet_doc_to_visual at 0x7fdb9b733670>",
+      "doc_to_text": "<function doc_to_text at 0x7fdb9b7339d0>",
+      "doc_to_target": "{{answer}}",
+      "process_results": "<function mmvet_process_results at 0x7fdb9b733ca0>",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "gpt_eval_score",
+          "aggregation": "<function mmvet_aggregate_results at 0x7fdb9b6d3160>",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "max_new_tokens": 1024,
+        "temperature": 0.2,
+        "top_p": 1.0,
+        "num_beams": 1,
+        "do_sample": false,
+        "until": [
+          "\n\n"
+        ]
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 0.0,
+        "gpt_eval_model_name": "gpt-4-0613"
+      },
+      "lmms_eval_specific_kwargs": {
+        "default": {
+          "pre_prompt": "First please perform reasoning, and think step by step to provide best answer to the following question: \n\n",
+          "post_prompt": ""
+        },
+        "pre_prompt": "First please perform reasoning, and think step by step to provide best answer to the following question: \n\n",
+        "post_prompt": ""
+      }
+    },
+    "vizwiz_vqa_test": {
+      "task": "vizwiz_vqa_test",
+      "dataset_path": "lmms-lab/VizWiz-VQA",
+      "test_split": "test",
+      "full_docs": false,
+      "process_results_use_image": false,
+      "doc_to_visual": "<function vizwiz_vqa_doc_to_visual at 0x7fdb9b6e4820>",
+      "doc_to_text": "<function vizwiz_vqa_doc_to_text at 0x7fdb9b6d33a0>",
+      "doc_to_target": "answer",
+      "process_results": "<function vizwiz_vqa_process_results at 0x7fdb9b6d3ee0>",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "submission",
+          "aggregation": "<function vizwiz_vqa_aggregate_submissions at 0x7fdb9b6e4670>",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "until": [
+          "ASSISTANT:"
+        ]
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": [
+        {
+          "version": 0.0
+        }
+      ],
+      "lmms_eval_specific_kwargs": {
+        "default": {
+          "pre_prompt": "",
+          "post_prompt": "\nWhen the provided information is insufficient, respond with 'Unanswerable'.\nAnswer the question using a single word or phrase."
+        },
+        "pre_prompt": "",
+        "post_prompt": "\nWhen the provided information is insufficient, respond with 'Unanswerable'.\nAnswer the question using a single word or phrase."
+      }
+    },
+    "vizwiz_vqa_val": {
+      "task": "vizwiz_vqa_val",
+      "dataset_path": "lmms-lab/VizWiz-VQA",
+      "test_split": "val",
+      "full_docs": false,
+      "process_results_use_image": false,
+      "doc_to_visual": "<function vizwiz_vqa_doc_to_visual at 0x7fdb9b645af0>",
+      "doc_to_text": "<function vizwiz_vqa_doc_to_text at 0x7fdb9b64f040>",
+      "doc_to_target": "answer",
+      "process_results": "<function vizwiz_vqa_process_results at 0x7fdb9b64f310>",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "exact_match",
+          "aggregation": "mean",
+          "higher_is_better": true,
+          "ignore_case": true,
+          "ignore_punctuation": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "until": [
+          "ASSISTANT:"
+        ]
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": [
+        {
+          "version": 0.0
+        }
+      ],
+      "lmms_eval_specific_kwargs": {
+        "default": {
+          "pre_prompt": "",
+          "post_prompt": "\nWhen the provided information is insufficient, respond with 'Unanswerable'.\nAnswer the question using a single word or phrase."
+        },
+        "pre_prompt": "",
+        "post_prompt": "\nWhen the provided information is insufficient, respond with 'Unanswerable'.\nAnswer the question using a single word or phrase."
+      }
+    }
+  },
+  "versions": {
+    "gqa": "Yaml",
+    "mmbench_en_dev": "Yaml",
+    "mmbench_en_test": "Yaml",
+    "mme": "Yaml",
+    "mmstar": "Yaml",
+    "mmvet": 0.0,
+    "vizwiz_vqa_test": "Yaml",
+    "vizwiz_vqa_val": "Yaml"
+  },
+  "n-shot": {
+    "gqa": 0,
+    "mmbench_en_dev": 0,
+    "mmbench_en_test": 0,
+    "mme": 0,
+    "mmstar": 0,
+    "mmvet": 0,
+    "vizwiz_vqa_test": 0,
+    "vizwiz_vqa_val": 0
+  },
+  "higher_is_better": {
+    "gqa": {
+      "exact_match": true
+    },
+    "mmbench_en": {
+      "exact_match": true,
+      "submission": true,
+      "gpt_eval_score": true
+    },
+    "mmbench_en_dev": {
+      "gpt_eval_score": true,
+      "submission": true
+    },
+    "mmbench_en_test": {
+      "submission": true
+    },
+    "mme": {
+      "mme_perception_score": true,
+      "mme_cognition_score": true
+    },
+    "mmstar": {
+      "coarse perception": true,
+      "fine-grained perception": true,
+      "instance reasoning": true,
+      "logical reasoning": true,
+      "science & technology": true,
+      "math": true,
+      "average": true
+    },
+    "mmvet": {
+      "gpt_eval_score": true
+    },
+    "vizwiz_vqa": {
+      "exact_match": true,
+      "submission": true,
+      "gpt_eval_score": true
+    },
+    "vizwiz_vqa_test": {
+      "submission": true
+    },
+    "vizwiz_vqa_val": {
+      "exact_match": true
+    }
+  },
+  "n-samples": {
+    "vizwiz_vqa_val": {
+      "original": 4319,
+      "effective": 4319
+    },
+    "vizwiz_vqa_test": {
+      "original": 8000,
+      "effective": 8000
+    },
+    "mmvet": {
+      "original": 218,
+      "effective": 218
+    },
+    "mmstar": {
+      "original": 1500,
+      "effective": 1500
+    },
+    "mme": {
+      "original": 2374,
+      "effective": 2374
+    },
+    "mmbench_en_dev": {
+      "original": 4329,
+      "effective": 4329
+    },
+    "mmbench_en_test": {
+      "original": 6666,
+      "effective": 6666
+    },
+    "gqa": {
+      "original": 12578,
+      "effective": 12578
+    }
+  },
+  "config": {
+    "model": "llava",
+    "model_args": "pretrained=/public_data/jihai/understanding/scripts/v1_5/checkpoints/llava-v1.5-7b-clip-gen-4/checkpoint-5198",
+    "batch_size": "1",
+    "batch_sizes": [],
+    "device": null,
+    "use_cache": null,
+    "limit": null,
+    "bootstrap_iters": 100000,
+    "gen_kwargs": "",
+    "random_seed": 0,
+    "numpy_seed": 1234,
+    "torch_seed": 1234,
+    "fewshot_seed": 1234
+  },
+  "git_hash": "f28f1df",
+  "date": "20250516_131325",
+  "task_hashes": {
+    "vizwiz_vqa_val": "309050356405511a59fd936472d123fd8e96405bef5a1fc6b9ad602f5a447005",
+    "vizwiz_vqa_test": "a23695fd25122a7aafbf78d3459d0cfe885da8562572b6e81f763804b8c1d9dd",
+    "mmvet": "5441f413e7b70fe9cca34b6c5eebe9022c70a7479cccb52113c5f6aac7f9637d",
+    "mmstar": "c071f18b96d772719d8402c730ecdc67ba5838be9ad10c9f4dac96c33c351e88",
+    "mme": "37a6daf3517a230d3fbe10eee9b020f60e53e79498ec84fb917164c92c811b19",
+    "mmbench_en_dev": "6009dab29953252fa9f49286f9f86af2c216c28400bf4ce6db38ad017778c7c7",
+    "mmbench_en_test": "9588958bddc355273931dae37f28c04fe0123e8b6a2bcf3e2b09a073c5fc7a56",
+    "gqa": "e580b1e054d4e89e04fb2f1fd5cc2312052185d34a4a525bf5f037484037309d"
+  },
+  "model_source": "llava",
+  "model_name": "/public_data/jihai/understanding/scripts/v1_5/checkpoints/llava-v1.5-7b-clip-gen-4/checkpoint-5198",
+  "model_name_sanitized": "llava-v1.5-7b-clip-gen-4__checkpoint-5198",
+  "system_instruction": null,
+  "system_instruction_sha": null,
+  "fewshot_as_multiturn": false,
+  "chat_template": null,
+  "chat_template_sha": null,
+  "start_time": 3698640.039285844,
+  "end_time": 3699289.964780961,
+  "total_evaluation_time_seconds": "649.9254951169714"
+}

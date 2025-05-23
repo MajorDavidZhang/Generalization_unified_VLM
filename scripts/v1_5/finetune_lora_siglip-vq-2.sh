@@ -15,8 +15,8 @@ deepspeed --master_port 29515 --include=localhost:5,6,7 /public_data/jihai/under
     --deepspeed /public_data/jihai/understanding/scripts/zero2.json \
     --model_name_or_path /public_data/jihai/tmp/vicuna-7b-v1.5 \
     --version v1 \
-    --data_path /public_data/jihai/data/multimodalout/smart_watch_train_68kg_180km.json \
-    --image_folder /public_data/jihai/data/multimodalout/smart_watch_image_train_68kg_180km \
+    --data_path /public_data/jihai/data/multimodalout/smart_watch_train_180ku_180km.json \
+    --image_folder /public_data/jihai/data/multimodalout/smart_watch_image_train_180ku_180km \
     --vision_tower google/siglip-base-patch16-224 \
     --vision_tower_path /public_data/jihai/tmp/siglip-base-patch16-224\
     --vision_tower_gen vq \
@@ -38,8 +38,8 @@ deepspeed --master_port 29515 --include=localhost:5,6,7 /public_data/jihai/under
     --num_image_token 256 \
     --bf16 True \
     --tf32 True \
-    --output_dir ./checkpoints/llava-v1.5-7b-siglip-vq_68kg_180km-sw-lora \
-    --num_ckpt_to_save 14 \
+    --output_dir ./checkpoints/llava-v1.5-7b-siglip-vq_180ku_180km-sw-lora \
+    --num_ckpt_to_save 20 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 131 \
     --per_device_eval_batch_size 4 \
@@ -61,23 +61,12 @@ deepspeed --master_port 29515 --include=localhost:5,6,7 /public_data/jihai/under
 
 sleep 10
 
-python eval_generate_smartwatch.py \
-  --device "cuda:5" \
-  --ckpt_start 5 \
-  --ckpt_step 45 \
-  --ckpt_num 3 \
-  --model_name "llava-v1.5-7b-siglip-vq_68kg_180km-sw-lora" > output_gpu5.log 2>&1 &
-
-python eval_generate_smartwatch.py \
-  --device "cuda:6" \
-  --ckpt_start 8 \
-  --ckpt_step 45 \
-  --ckpt_num 3 \
-  --model_name "llava-v1.5-7b-siglip-vq_68kg_180km-sw-lora" > output_gpu6.log 2>&1 &
 
 python eval_generate_smartwatch.py \
   --device "cuda:7" \
-  --ckpt_start 11 \
+  --ckpt_start 20 \
   --ckpt_step 45 \
-  --ckpt_num 4 \
-  --model_name "llava-v1.5-7b-siglip-vq_68kg_180km-sw-lora" \
+  --ckpt_num 1 \
+  --model_name "llava-v1.5-7b-siglip-vq_180ku_180km-sw-lora" 
+
+sleep 10

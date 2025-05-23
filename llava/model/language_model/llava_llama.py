@@ -378,6 +378,16 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
             return_dict=return_dict
         )
 
+    # def generate(
+    #     self,
+    #     inputs: Optional[torch.Tensor] = None,
+    #     images: Optional[Dict[str, torch.Tensor]]=None,
+    #     image_sizes: Optional[torch.Tensor] = None,
+    #     img_token_start: Optional[List[torch.LongTensor]] = [None],
+    #     input_img_features=None,
+    #     **kwargs,
+    # )
+
     @torch.no_grad()
     def generate(
         self,

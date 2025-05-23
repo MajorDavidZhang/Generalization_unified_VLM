@@ -43,6 +43,7 @@ class VQVisionTower(nn.Module):
 
         self.vision_tower_name = vision_tower
         self.vq_cfg= VQArgs()
+        self.args=args
         #self.select_layer = args.mm_vision_select_layer
         #self.select_feature = getattr(args, 'mm_vision_select_feature', 'patch')
 
@@ -76,6 +77,15 @@ class VQVisionTower(nn.Module):
         self.vision_tower.load_state_dict(model_weight)
         del checkpoint
 
+        if self.args.vision_tower_permutation_path is None:
+            self.permutation=nn.Identity()
+        else:
+            print(f"load vision permutation at {self.args.vision_tower_permutation_path}")
+            state=torch.load(self.args.vision_tower_permutation_path)
+            self.permutation=Affine(self.hidden_size)
+            self.permutation.load_state_dict(state)
+            self.permutation.requires_grad_(False)
+
         self.is_loaded = True
 
 
@@ -87,12 +97,18 @@ class VQVisionTower(nn.Module):
             for image in images:
                 latent, _, [_, _, indices] = self.vision_tower.encode(image.to(device=self.device, dtype=self.dtype).unsqueeze(0))
                 latent = latent.to(image.dtype)
+                latent=latent.permute(0,2,3,1) #b,h,w,c
+                latent=latent.view(latent.shape[0],-1,latent.shape[-1]) #b,seq_len,c
+                latent = self.permutation(latent)
                 image_features.append(latent)
                 image_indices.append(indices)
         else:
           
             image_features, _, [_, _, image_indices] = self.vision_tower.encode(images.to(device=self.device, dtype=self.dtype))
             image_features = image_features.to(images.dtype)
+            image_features=image_features.permute(0,2,3,1) #b,h,w,c
+            image_features=image_features.view(image_features.shape[0],-1,image_features.shape[-1]) #b,seq_len,c
+            image_features = self.permutation(image_features)
 
         return (image_features,image_indices)
 
@@ -137,7 +153,7 @@ class CLIPVisionTower(nn.Module):
         self.vision_tower_name = vision_tower
         self.select_layer = args.mm_vision_select_layer
         self.select_feature = getattr(args, 'mm_vision_select_feature', 'patch')
-
+        self.args=args
         if not delay_load:
             self.load_model()
         elif getattr(args, 'unfreeze_mm_vision_tower', False):
@@ -150,8 +166,8 @@ class CLIPVisionTower(nn.Module):
             print('{} is already loaded, `load_model` called again, skipping.'.format(self.vision_tower_name))
             return
 
-        self.image_processor = CLIPImageProcessor.from_pretrained(self.vision_tower_name)
-        self.vision_tower = CLIPVisionModel.from_pretrained(self.vision_tower_name, device_map=device_map)
+        self.image_processor = CLIPImageProcessor.from_pretrained(self.vision_tower_name,cache_dir=self.args.vision_tower_path)
+        self.vision_tower = CLIPVisionModel.from_pretrained(self.vision_tower_name, device_map=device_map,cache_dir=self.args.vision_tower_path)
         self.vision_tower.requires_grad_(False)
 
         self.is_loaded = True

@@ -1,21 +1,46 @@
 #!/bin/bash
-
-deepspeed llava/train/train_mem.py \
-    --deepspeed ./scripts/zero3.json \
-    --model_name_or_path lmsys/vicuna-13b-v1.5 \
+#export CUDA_VISIBLE_DEVICES=1,2,3
+#--generation_only True \
+#deepspeed --master_port 29501 --include=localhost:2,3 /datadrive_a/jihai/LLaVA/llava/train/train.py \
+#siglip have no cls token, mm_vision_select_feature should be set to cls_patch
+#bs 85 if 3 gpu
+#--vision_tower google/siglip-base-patch16-224 \
+    # --vision_tower_gen synthetic \
+    # --vision_tower_gen_path /datadrive_a/jihai/LLaVA/llava/model/multimodal_encoder/plain.pth\
+    # --vision_tower_permutation_path /public_data/jihai/understanding/llava/model/multimodal_encoder/siglip_affine_1.pth\
+# 禁用RoCE，强制使用本地总线
+export HF_ENDPOINT=https://hf-mirror.com
+deepspeed --master_port 29506 --include=localhost:0,1,2,3,4,5,6,7 /public_data/jihai/understanding/llava/train/train_mem.py \
+    --deepspeed /public_data/jihai/understanding/scripts/zero2.json \
+    --model_name_or_path /public_data/jihai/tmp/vicuna-7b-v1.5 \
     --version v1 \
-    --data_path ./playground/data/llava_v1_5_mix665k.json \
-    --image_folder ./playground/data \
+    --data_path /public_data/ShareGPT4V/sharegpt4v/llava_v1_5_mix665k_with_generation.json \
+    --image_folder /public_data/ShareGPT4V \
     --vision_tower openai/clip-vit-large-patch14-336 \
-    --pretrain_mm_mlp_adapter ./checkpoints/llava-v1.5-13b-pretrain/mm_projector.bin \
-    --mm_projector_type mlp2x_gelu \
-    --mm_vision_select_layer -2 \
+    --vision_tower_path /public_data/jihai/tmp/clip-336 \
+    --vision_tower_gen vq \
+    --pretrained_mm_mlp_adapter /public_data/jihai/understanding/scripts/v1_5/checkpoints/llava-v1.5-7b-pretrain/mm_projector/checkpoint-2767.bin \
+    --mm_projector_head_output_size 16384 \
+    --mm_projector_type mlp \
+    --mm_projector_gen_type mlp \
+    --tune_mm_mlp_adapter False \
     --mm_use_im_start_end False \
     --mm_use_im_patch_token False \
+    --mm_vision_select_feature patch \
+    --mm_vision_select_layer -2 \
     --image_aspect_ratio pad \
-    --group_by_modality_length True \
+    --group_by_modality_length False \
+    --understanding_only False \
+    --dataset llava \
+    --image_loss cosine \
+    --alpha 0.2 \
+    --image_shape_un 3 336 336 \
+    --image_shape_gen 3 256 256 \
+    --num_image_token 256 \
     --bf16 True \
-    --output_dir ./checkpoints/llava-v1.5-13b \
+    --tf32 True \
+    --output_dir ./checkpoints/llava-v1.5-7b \
+    --num_ckpt_to_save 2 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 16 \
     --per_device_eval_batch_size 4 \
@@ -29,9 +54,9 @@ deepspeed llava/train/train_mem.py \
     --warmup_ratio 0.03 \
     --lr_scheduler_type "cosine" \
     --logging_steps 1 \
-    --tf32 True \
     --model_max_length 2048 \
     --gradient_checkpointing True \
     --dataloader_num_workers 4 \
     --lazy_preprocess True \
-    --report_to wandb
+    --report_to none
+

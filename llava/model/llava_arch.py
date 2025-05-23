@@ -51,6 +51,8 @@ class LlavaMetaModel:
         if hasattr(config, "mm_vision_tower"):
             self.vision_tower = build_vision_tower(config, delay_load=True)
             self.mm_projector_un=build_vision_projector(config.mm_un_hidden_size,config.hidden_size,self.config.mm_projector_type)
+            self.config.detach_mm_projector = getattr(config, 'detach_mm_projector', False)
+            self.config.mm_projector_gen_type = getattr(config, 'mm_projector_gen_type', self.config.mm_projector_type)
             if 'unpad' in getattr(config, 'mm_patch_merge_type', ''):
                 self.image_newline = nn.Parameter(
                     torch.empty(config.hidden_size, dtype=self.dtype)
@@ -58,7 +60,10 @@ class LlavaMetaModel:
         if hasattr(config, "mm_vision_tower_gen"):
             if config.mm_vision_tower_gen == 'same':
                 self.vision_tower_gen = self.vision_tower
-                self.mm_projector_gen = None
+                if self.config.detach_mm_projector:
+                    self.mm_projector_gen = build_vision_projector(config.mm_gen_hidden_size,config.hidden_size,self.config.mm_projector_gen_type)
+                else:
+                    self.mm_projector_gen = None
             else:
                 vision_tower_gen_cfg=VisionArguments(
                     vision_tower=config.mm_vision_tower_gen,
@@ -71,7 +76,8 @@ class LlavaMetaModel:
                     vision_tower_permutation_path=config.vision_tower_gen_permutation_path
                 )
                 self.vision_tower_gen = build_vision_tower(vision_tower_gen_cfg, delay_load=True)
-                self.config.mm_projector_gen_type = getattr(config, 'mm_projector_gen_type', self.config.mm_projector_type)
+                #self.config.mm_projector_gen_type = getattr(config, 'mm_projector_gen_type', self.config.mm_projector_type)
+                
                 self.mm_projector_gen = build_vision_projector(config.mm_gen_hidden_size,config.hidden_size,self.config.mm_projector_gen_type)
             self.mm_projector_head=build_vision_projector(config.hidden_size,config.mm_projector_head_output_size,'linear')
 
@@ -149,6 +155,7 @@ class LlavaMetaModel:
         self.config.vision_tower_gen_path=model_args.vision_tower_gen_path
         self.config.mm_projector_type = getattr(model_args, 'mm_projector_type', 'linear')
         self.config.mm_projector_gen_type = getattr(model_args, 'mm_projector_gen_type',self.config.mm_projector_type)
+        self.config.detach_mm_projector = getattr(model_args, 'detach_mm_projector', False)
         self.config.mm_un_hidden_size = vision_tower.hidden_size
         self.config.mm_gen_hidden_size=self.vision_tower_gen.hidden_size
         self.config.mm_vision_select_layer = mm_vision_select_layer
@@ -162,7 +169,10 @@ class LlavaMetaModel:
         if getattr(self, 'mm_projector_un', None) is None:
             self.mm_projector_un=build_vision_projector(self.config.mm_un_hidden_size,self.config.hidden_size,self.config.mm_projector_type)
             if model_args.vision_tower_gen=='same':
-                self.mm_projector_gen = None
+                if self.config.detach_mm_projector:
+                    self.mm_projector_gen = build_vision_projector(self.config.mm_gen_hidden_size,self.config.hidden_size,self.config.mm_projector_gen_type)
+                else:
+                    self.mm_projector_gen = None
             else:
                 self.mm_projector_gen = build_vision_projector(self.config.mm_gen_hidden_size,self.config.hidden_size,self.config.mm_projector_gen_type)
             self.mm_projector_head=build_vision_projector(self.config.hidden_size,self.config.mm_projector_head_output_size,'linear')
@@ -193,7 +203,7 @@ class LlavaMetaModel:
             #mm_projector_head_weights = torch.load(mm_projector_head_weights_path, map_location='cpu')
             self.mm_projector_head.load_state_dict(get_w(mm_projector_weights, 'mm_projector_head'))
 
-            if self.config.vision_tower_gen!='same':
+            if self.mm_projector_gen is not None :
                 #self.mm_projector_gen_weights_path=os.path.join(pretrained_mm_mlp_adapter,'mm_projector_gen.pth')
                 #mm_projector_gen_weights = torch.load(self.mm_projector_gen_weights_path, map_location='cpu')
                 self.mm_projector_gen.load_state_dict(get_w(mm_projector_weights, 'mm_projector_gen'))
@@ -297,9 +307,6 @@ class LlavaMetaForCausalLM(ABC):
             vision_tower_gen_out = self.get_model().get_vision_tower_gen()(images_generation)
             if isinstance(vision_tower_gen_out, tuple): #VQ
                 image_features_generation = vision_tower_gen_out[0]
-                
-                image_features_generation=image_features_generation.permute(0,2,3,1) #b,h,w,c
-                image_features_generation=image_features_generation.view(image_features_generation.shape[0],-1,image_features_generation.shape[-1]) #b,seq_len,c
                 image_labels=vision_tower_gen_out[1]
                 image_labels=image_labels.view(image_features_generation.shape[0],-1) #b,seq_len
                 image_features_generation = image_features_generation.to(self.device)
@@ -323,8 +330,6 @@ class LlavaMetaForCausalLM(ABC):
             image_features_understanding = self.get_model().get_vision_tower()(images_understanding) #include pseudo padding image features,which should be skipped
             if isinstance(image_features_understanding, tuple):
                 image_features_understanding = image_features_understanding[0]
-                image_features_understanding=image_features_understanding.permute(0,2,3,1) #b,h,w,c
-                image_features_understanding=image_features_understanding.view(image_features_understanding.shape[0],-1,image_features_understanding.shape[-1]) #b,seq_len,c
             image_features_understanding = image_features_understanding.to(self.device)
             image_features_understanding=self.get_model().mm_projector_un(image_features_understanding)
         new_input_embeds = []
