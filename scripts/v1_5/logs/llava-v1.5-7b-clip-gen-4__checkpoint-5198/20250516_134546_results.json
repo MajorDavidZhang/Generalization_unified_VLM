@@ -1,0 +1,299 @@
+{
+  "results": {
+    "pope": {
+      "alias": "pope",
+      "pope_accuracy,none": 0.8694444444444445,
+      "pope_accuracy_stderr,none": "N/A",
+      "pope_precision,none": 0.9337333681189669,
+      "pope_precision_stderr,none": "N/A",
+      "pope_recall,none": 0.7953333333333333,
+      "pope_recall_stderr,none": "N/A",
+      "pope_f1_score,none": 0.858994359774391,
+      "pope_f1_score_stderr,none": "N/A",
+      "pope_yes_ratio,none": 0.5,
+      "pope_yes_ratio_stderr,none": "N/A"
+    },
+    "textvqa": {
+      " ": " ",
+      "alias": "textvqa"
+    },
+    "textvqa_test": {
+      "alias": " - textvqa_test",
+      "exact_match,none": [],
+      "exact_match_stderr,none": [],
+      "submission,none": null,
+      "submission_stderr,none": "N/A"
+    },
+    "textvqa_val": {
+      "alias": " - textvqa_val",
+      "exact_match,none": 0.4687800000000003,
+      "exact_match_stderr,none": 0.006806667941488872,
+      "submission,none": null,
+      "submission_stderr,none": "N/A"
+    }
+  },
+  "group_subtasks": {
+    "pope": [],
+    "textvqa": [
+      "textvqa_val",
+      "textvqa_test"
+    ]
+  },
+  "configs": {
+    "pope": {
+      "task": "pope",
+      "dataset_path": "lmms-lab/POPE",
+      "dataset_kwargs": {
+        "token": true
+      },
+      "test_split": "test",
+      "full_docs": false,
+      "process_results_use_image": false,
+      "doc_to_visual": "<function pope_doc_to_visual at 0x7f98d1689b80>",
+      "doc_to_text": "<function pope_doc_to_text at 0x7f98d169c160>",
+      "doc_to_target": "answer",
+      "process_results": "<function pope_process_results at 0x7f98d169c700>",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "pope_accuracy",
+          "aggregation": "<function pope_aggregate_accuracy at 0x7f98d169cca0>",
+          "higher_is_better": true
+        },
+        {
+          "metric": "pope_precision",
+          "aggregation": "<function pope_aggregate_precision at 0x7f98d16a1280>",
+          "higher_is_better": true
+        },
+        {
+          "metric": "pope_recall",
+          "aggregation": "<function pope_aggregate_recall at 0x7f98d16a1820>",
+          "higher_is_better": true
+        },
+        {
+          "metric": "pope_f1_score",
+          "aggregation": "<function pope_aggregate_f1_score at 0x7f98d16a1dc0>",
+          "higher_is_better": true
+        },
+        {
+          "metric": "pope_yes_ratio",
+          "aggregation": "<function pope_aggregate_yes_ratio at 0x7f98d16a73a0>",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "max_new_tokens": 128,
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "num_beams": 1,
+        "do_sample": false,
+        "until": [
+          "\n\n"
+        ]
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": [
+        {
+          "version": 0.0
+        }
+      ],
+      "lmms_eval_specific_kwargs": {
+        "default": {
+          "pre_prompt": "",
+          "post_prompt": "\nAnswer the question using a single word or phrase."
+        },
+        "plm": {
+          "pre_prompt": "",
+          "post_prompt": "\nYour response must be concise."
+        },
+        "pre_prompt": "",
+        "post_prompt": "\nAnswer the question using a single word or phrase."
+      }
+    },
+    "textvqa_test": {
+      "task": "textvqa_test",
+      "dataset_path": "lmms-lab/textvqa",
+      "test_split": "test",
+      "full_docs": false,
+      "process_results_use_image": false,
+      "doc_to_visual": "<function textvqa_doc_to_visual at 0x7f98d12ce4c0>",
+      "doc_to_text": "<function textvqa_doc_to_text at 0x7f98d12ceaf0>",
+      "doc_to_target": "answer",
+      "process_results": "<function textvqa_process_results at 0x7f98d12cee50>",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "submission",
+          "aggregation": "<function textvqa_aggregate_submissions at 0x7f98d12ce310>",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "until": [
+          "ASSISTANT:"
+        ]
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "lmms_eval_specific_kwargs": {
+        "default": {
+          "pre_prompt": "",
+          "post_prompt": "\nAnswer the question using a single word or phrase.",
+          "ocr": false
+        },
+        "qwen_vl": {
+          "pre_prompt": "",
+          "post_prompt": " Answer:"
+        },
+        "plm": {
+          "pre_prompt": "",
+          "post_prompt": "\nProvide a short and direct response."
+        },
+        "pre_prompt": "",
+        "post_prompt": "\nAnswer the question using a single word or phrase.",
+        "ocr": false
+      }
+    },
+    "textvqa_val": {
+      "task": "textvqa_val",
+      "dataset_path": "lmms-lab/textvqa",
+      "test_split": "validation",
+      "full_docs": false,
+      "process_results_use_image": false,
+      "doc_to_visual": "<function textvqa_doc_to_visual at 0x7f98d12d74c0>",
+      "doc_to_text": "<function textvqa_doc_to_text at 0x7f98d0fae430>",
+      "doc_to_target": "answer",
+      "process_results": "<function textvqa_process_results at 0x7f98d0fae790>",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "exact_match",
+          "aggregation": "mean",
+          "higher_is_better": true,
+          "ignore_case": true,
+          "ignore_punctuation": true
+        },
+        {
+          "metric": "submission",
+          "aggregation": "<function textvqa_aggregate_submissions at 0x7f98d12d7670>",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "until": [
+          "ASSISTANT:"
+        ]
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "lmms_eval_specific_kwargs": {
+        "default": {
+          "pre_prompt": "",
+          "post_prompt": "\nAnswer the question using a single word or phrase.",
+          "ocr": false
+        },
+        "qwen_vl": {
+          "pre_prompt": "",
+          "post_prompt": " Answer:"
+        },
+        "plm": {
+          "pre_prompt": "",
+          "post_prompt": "\nProvide a short and direct response."
+        },
+        "pre_prompt": "",
+        "post_prompt": "\nAnswer the question using a single word or phrase.",
+        "ocr": false
+      }
+    }
+  },
+  "versions": {
+    "pope": "Yaml",
+    "textvqa_test": "Yaml",
+    "textvqa_val": "Yaml"
+  },
+  "n-shot": {
+    "pope": 0,
+    "textvqa_test": 0,
+    "textvqa_val": 0
+  },
+  "higher_is_better": {
+    "pope": {
+      "pope_accuracy": true,
+      "pope_precision": true,
+      "pope_recall": true,
+      "pope_f1_score": true,
+      "pope_yes_ratio": true
+    },
+    "textvqa": {
+      "exact_match": true,
+      "submission": true
+    },
+    "textvqa_test": {
+      "submission": true
+    },
+    "textvqa_val": {
+      "exact_match": true,
+      "submission": true
+    }
+  },
+  "n-samples": {
+    "textvqa_val": {
+      "original": 5000,
+      "effective": 5000
+    },
+    "textvqa_test": {
+      "original": 5734,
+      "effective": 5734
+    },
+    "pope": {
+      "original": 9000,
+      "effective": 9000
+    }
+  },
+  "config": {
+    "model": "llava",
+    "model_args": "pretrained=/public_data/jihai/understanding/scripts/v1_5/checkpoints/llava-v1.5-7b-clip-gen-4/checkpoint-5198",
+    "batch_size": "1",
+    "batch_sizes": [],
+    "device": null,
+    "use_cache": null,
+    "limit": null,
+    "bootstrap_iters": 100000,
+    "gen_kwargs": "",
+    "random_seed": 0,
+    "numpy_seed": 1234,
+    "torch_seed": 1234,
+    "fewshot_seed": 1234
+  },
+  "git_hash": "f28f1df",
+  "date": "20250516_134546",
+  "task_hashes": {
+    "textvqa_val": "5c6403505bed972aa9cede63ec8198e2c120ae08d260f170d7fff5261efc96af",
+    "textvqa_test": "f58377e18eafdf97fa8d1a21e2a4fb5ba1e7ac8af9563859fef92e71ad4c71fd",
+    "pope": "978a20f4c63f11022b259b6763a5c8e6dae42703eb111adedbc96777a37e8b29"
+  },
+  "model_source": "llava",
+  "model_name": "/public_data/jihai/understanding/scripts/v1_5/checkpoints/llava-v1.5-7b-clip-gen-4/checkpoint-5198",
+  "model_name_sanitized": "llava-v1.5-7b-clip-gen-4__checkpoint-5198",
+  "system_instruction": null,
+  "system_instruction_sha": null,
+  "fewshot_as_multiturn": false,
+  "chat_template": null,
+  "chat_template_sha": null,
+  "start_time": 3700581.053232652,
+  "end_time": 3700961.418573065,
+  "total_evaluation_time_seconds": "380.36534041306004"
+}
